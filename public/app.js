@@ -244,6 +244,7 @@ function render() {
   $('#lista-pessoas').innerHTML = pessoas().map((p) => `<option value="${esc(p)}">`).join('');
   $('#form-lanc').forma.innerHTML = '<option value="">Pago na conta</option>'
     + estado.cartoes.map((c) => `<option value="${c.id}">Cartão ${esc(c.nome)}</option>`).join('');
+  $('#banner-exemplo').hidden = !temExemplos();
   renderResumo(); renderLancamentos(); renderCartoes(); renderFixas(); renderRendas(); renderEmprestimos();
   renderOrigemImportacao();
 }
@@ -643,8 +644,57 @@ $('#arquivo').addEventListener('change', async (e) => {
   if (!arq) return;
   let texto = await arq.text();
   if (texto.includes('\uFFFD')) texto = new TextDecoder('windows-1252').decode(await arq.arrayBuffer());
+  importacao.exemplo = false;
   try { iniciarRevisao(texto); } catch (err) { erroImportacao(err.message); }
 });
+
+/* ---------- Exemplo: extrato fictício para ver a revisão funcionando ---------- */
+
+function csvExemplo() {
+  const [a, m] = anoMes(new Date()).split('-');
+  const d = (dia) => `${String(dia).padStart(2, '0')}/${m}/${a}`;
+  return [CABECALHO,
+    `${d(1)};Salário Empresa Exemplo;4200,00;renda;;;;`,
+    `${d(5)};Aluguel;1500,00;fixa;Moradia;sim;;`,
+    `${d(6)};Enel Energia;187,30;fixa;Contas da casa;sim;;`,
+    `${d(7)};Supermercado Pão de Açúcar;342,18;flexivel;Mercado;sim;;`,
+    `${d(8)};iFood;64,90;flexivel;Restaurante/Delivery;nao;;`,
+    `${d(9)};Pix para Maria Souza;300,00;emprestimo-saiu;;;Maria Souza;`,
+    `${d(10)};Pagamento fatura Nubank;1120,45;fatura;;;;`,
+    `${d(12)};Drogasil;48,70;flexivel;Saúde;;;`,
+    `${d(14)};Uber;23,40;flexivel;Transporte;;;`,
+    `${d(15)};Pix de João Lima;150,00;emprestimo-entrou;;;;`,
+    `${d(20)};Pix de Maria Souza;100,00;emprestimo-entrou;;;Maria Souza;`,
+    `${d(22)};Cinema;56,00;flexivel;Lazer;nao;;`,
+  ].join('\n');
+}
+
+const temExemplos = () => ['lancamentos', 'fixas', 'rendas', 'cartoes'].some((k) => estado[k].some((x) => x.exemplo));
+
+$('#ver-exemplo').onclick = () => {
+  // cadastros de exemplo, para a revisão mostrar os vínculos (conta fixa, renda, cartão)
+  if (!estado.fixas.some((f) => norm(f.nome) === 'aluguel')) {
+    estado.fixas.push({ id: uid(), nome: 'Aluguel', valor: 1500, dia: 5, categoria: 'Moradia', essencial: true, exemplo: true });
+  }
+  if (!estado.rendas.length) estado.rendas.push({ id: uid(), nome: 'Salário', valor: 4200, dia: 1, exemplo: true });
+  if (!estado.cartoes.length) estado.cartoes.push({ id: uid(), nome: 'Nubank', fechamento: 3, vencimento: 10, exemplo: true });
+  salvar(); render();
+  importacao.origem = 'conta'; importacao.exemplo = true;
+  document.querySelector('input[name=origem][value=conta]').checked = true;
+  renderOrigemImportacao();
+  iniciarRevisao(csvExemplo());
+};
+
+$('#apagar-exemplos').onclick = async () => {
+  if (!await confirmar('Apagar todos os dados de exemplo? Seus dados de verdade continuam.', 'Apagar exemplos')) return;
+  const ids = new Set([...estado.fixas, ...estado.rendas, ...estado.cartoes].filter((x) => x.exemplo).map((x) => x.id));
+  estado.lancamentos = estado.lancamentos.filter((l) => !l.exemplo);
+  estado.fixas = estado.fixas.filter((x) => !x.exemplo);
+  estado.rendas = estado.rendas.filter((x) => !x.exemplo);
+  estado.cartoes = estado.cartoes.filter((x) => !x.exemplo);
+  estado.lancamentos.forEach((l) => { ['fixaId', 'rendaId', 'cartaoId'].forEach((k) => { if (ids.has(l[k])) delete l[k]; }); });
+  salvar(); render(); ajustarFormLanc(); toast('Exemplos apagados');
+};
 
 /** preenche vínculos sugeridos (conta fixa, renda fixa, cartão) conforme o tipo da linha */
 function sugerirVinculos(r) {
@@ -699,6 +749,7 @@ function iniciarRevisao(texto) {
   $('#rev-titulo').textContent = doCartao
     ? `Revisão — fatura ${cartaoPorId(importacao.cartaoId).nome} (${nomeMes(importacao.mes).toLowerCase()})`
     : 'Revisão — extrato da conta';
+  $('#rev-exemplo').hidden = !importacao.exemplo;
   $('#imp-inicio').hidden = true; $('#imp-revisao').hidden = false;
   renderRevisao();
 }
@@ -779,7 +830,7 @@ function marcarTodos(v) { revisao.forEach((r) => { if (ehGasto(r)) r.essencial =
 $('#todos-ess').onclick = () => marcarTodos(true);
 $('#todos-nao').onclick = () => marcarTodos(false);
 
-function fecharRevisao() { revisao = []; $('#imp-inicio').hidden = false; $('#imp-revisao').hidden = true; }
+function fecharRevisao() { revisao = []; importacao.exemplo = false; $('#imp-inicio').hidden = false; $('#imp-revisao').hidden = true; }
 $('#cancelar-imp').onclick = fecharRevisao;
 
 function problemaDaLinha(r) {
@@ -804,6 +855,7 @@ $('#confirmar-imp').onclick = () => {
   inc.forEach((r) => {
     const l = { id: uid(), data: r.data, descricao: r.descricao.trim(), valor: r.valor, tipo: r.tipo };
     if (doCartao) { l.cartaoId = importacao.cartaoId; l.mes = importacao.mes; }
+    if (importacao.exemplo) l.exemplo = true;
     if (r.parcela) l.parcela = r.parcela;
     const mes = mesDe(l);
     if (ehGasto(l)) {
@@ -814,7 +866,7 @@ $('#confirmar-imp').onclick = () => {
     if (l.tipo === 'renda' && r.rendaId && !vinculado('rendaId', r.rendaId, mes)) l.rendaId = r.rendaId;
     if (l.tipo === 'fatura' && r.faturaCartaoId) l.cartaoId = r.faturaCartaoId;
     estado.lancamentos.push(l);
-    estado.memoria[norm(r.descricao)] = {
+    if (!importacao.exemplo) estado.memoria[norm(r.descricao)] = {
       tipo: l.tipo, ...(ehGasto(l) ? { categoria: l.categoria, essencial: l.essencial } : {}), ...(l.pessoa ? { pessoa: l.pessoa } : {}),
     };
   });
@@ -824,6 +876,7 @@ $('#confirmar-imp').onclick = () => {
     const cont = {}; inc.forEach((r) => { const m = r.data.slice(0, 7); cont[m] = (cont[m] || 0) + 1; });
     mesAtual = Object.entries(cont).sort((x, y) => y[1] - x[1])[0][0];
   }
+  importacao.exemplo = false;
   fecharRevisao(); render(); irPara(doCartao ? 'cartao' : 'resumo');
   toast(`${inc.length} lançamentos importados`);
 };

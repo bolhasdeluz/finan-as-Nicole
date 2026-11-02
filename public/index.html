@@ -31,6 +31,10 @@
   <main>
     <!-- RESUMO -->
     <section id="aba-resumo" class="aba">
+      <div id="banner-exemplo" class="aviso-exemplo" hidden>
+        <span>Você está vendo <b>dados de exemplo</b>.</span>
+        <button type="button" id="apagar-exemplos" class="mini sec">Apagar exemplos</button>
+      </div>
       <div class="cards">
         <div class="card"><small>Renda do mês</small><strong id="r-renda" class="pos"></strong><small id="r-renda-prev"></small></div>
         <div class="card"><small>Gastos do mês</small><strong id="r-total"></strong></div>
@@ -194,12 +198,17 @@
           <li>Baixe o CSV que a IA devolver e selecione aqui:
             <input type="file" id="arquivo" accept=".csv,text/csv,text/plain">
           </li>
+          <li class="sem-numero">Quer ver como funciona antes?
+            <button type="button" id="ver-exemplo" class="mini">Ver um exemplo</button>
+          </li>
         </ol>
         <p id="imp-erro" class="erro" hidden></p>
       </div>
 
       <div id="imp-revisao" hidden>
         <h2 id="rev-titulo">Revisão da importação</h2>
+        <p id="rev-exemplo" class="aviso-exemplo" hidden>Este é um <b>extrato de exemplo</b>, com dados fictícios, para você ver
+          como funciona. Pode mexer e salvar à vontade; depois toque em “Apagar exemplos” no Resumo.</p>
         <p class="dica">Confira cada linha: ajuste o tipo, a categoria e marque o que foi essencial.
           Em empréstimos, confira o nome da pessoa. Linhas desmarcadas não serão salvas.</p>
         <div class="acoes-lote">

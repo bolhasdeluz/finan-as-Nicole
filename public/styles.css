@@ -149,3 +149,9 @@ footer { color: var(--muted); font-size: .85rem; padding-bottom: 24px; text-alig
 .modal-caixa p { margin: 0 0 8px; line-height: 1.4; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--pri); outline-offset: 2px; }
 button.link { font: inherit; }
+
+/* --- dados de exemplo --- */
+.aviso-exemplo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+  background: var(--emp-bg); border: 1px dashed var(--pri); border-radius: 12px; padding: 10px 14px; margin: 0 0 16px; }
+.passos li.sem-numero { list-style: none; margin-left: -1.2em; color: var(--muted); }
+p.aviso-exemplo { display: block; }
