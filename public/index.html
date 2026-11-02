@@ -183,7 +183,8 @@
           <p id="sem-cartao" class="erro" hidden>Cadastre um cartão na aba Cartão primeiro.</p>
         </div>
         <ol class="passos">
-          <li><a href="modelo-importacao.csv" download>Baixe o modelo de planilha</a>.</li>
+          <li><a href="modelo-importacao.csv" download>Baixe o modelo de planilha</a>
+            (ou <button type="button" id="copiar-modelo" class="link">copie o modelo</button> e cole no chat).</li>
           <li>No chat da IA, anexe <span id="nome-doc">seu extrato bancário</span> + o modelo e cole este pedido:
             <div class="prompt-box">
               <pre id="prompt-ia"></pre>
@@ -232,8 +233,8 @@
             <li>Depois de entrar, cada alteração é enviada sozinha.</li>
           </ul>
         </div>
-        <p id="nuvem-indisponivel" class="erro" hidden>A nuvem só funciona quando o app é aberto pelo link
-          (https), não pelo arquivo no computador.</p>
+        <p id="nuvem-indisponivel" class="erro" hidden>A nuvem só funciona no site publicado do app.
+          Aqui os dados ficam só neste navegador.</p>
         <div class="origem" style="margin-bottom:12px">
           <label><input type="radio" name="modo-nuvem" value="entrar" checked> Já tenho conta</label>
           <label><input type="radio" name="modo-nuvem" value="criar"> Criar conta</label>
@@ -306,6 +307,15 @@
 
   <datalist id="lista-categorias"></datalist>
   <datalist id="lista-pessoas"></datalist>
+  <div id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-msg">
+    <div class="modal-caixa">
+      <p id="modal-msg"></p>
+      <div class="acoes">
+        <button type="button" id="modal-nao" class="sec">Cancelar</button>
+        <button type="button" id="modal-sim">Confirmar</button>
+      </div>
+    </div>
+  </div>
   <div id="toast" hidden></div>
   <script src="app.js"></script>
 </body>

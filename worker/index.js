@@ -75,6 +75,7 @@ async function cofre(req, env, id) {
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
+    if (url.pathname === '/api/ping') return json({ ok: true });
     const m = url.pathname.match(/^\/api\/cofre\/([^/]+)$/);
     if (m) {
       if (!HEX64.test(m[1])) return json({ erro: 'id inválido' }, 400);

@@ -1,18 +1,44 @@
+/* App de uso diário: abas no topo, cartões de números, tabelas. Cores por token, claro e escuro. */
 :root {
   --bg: #f6f7f9;
   --card: #fff;
   --txt: #1f2430;
-  --muted: #6b7280;
+  --muted: #646b78;
   --borda: #e3e6eb;
+  --sutil: #e9ecf2;
+  --cab: #fafbfc;
   --pri: #3b6ef5;
+  --sobre-pri: #fff;
   --ess: #2e9e6b;
   --nao: #e8833a;
   --erro: #c43d3d;
+  --ess-bg: #dff3ea; --ess-fg: #1d6e4a;
+  --nao-bg: #fbe8d9; --nao-fg: #9a4f17;
+  --emp-bg: #f4f1fd;
+  --sombra: rgba(20, 24, 33, .45);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--txt);
 }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171d; --card: #1c2028; --txt: #e6e8ee; --muted: #9aa1ae; --borda: #2c323d;
+    --sutil: #262b35; --cab: #20242c; --pri: #6b93ff; --sobre-pri: #0e1220;
+    --ess: #3fbf86; --nao: #f09a55; --erro: #ef6b6b;
+    --ess-bg: #173a2b; --ess-fg: #8fe0b9; --nao-bg: #3d2817; --nao-fg: #f6be8e; --emp-bg: #241f38;
+    --sombra: rgba(0, 0, 0, .6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171d; --card: #1c2028; --txt: #e6e8ee; --muted: #9aa1ae; --borda: #2c323d;
+  --sutil: #262b35; --cab: #20242c; --pri: #6b93ff; --sobre-pri: #0e1220;
+  --ess: #3fbf86; --nao: #f09a55; --erro: #ef6b6b;
+  --ess-bg: #173a2b; --ess-fg: #8fe0b9; --nao-bg: #3d2817; --nao-fg: #f6be8e; --emp-bg: #241f38;
+  --sombra: rgba(0, 0, 0, .6);
+  color-scheme: dark;
+}
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--txt); }
 header, nav, main, footer { max-width: 1000px; margin: 0 auto; padding: 0 16px; }
 header { display: flex; justify-content: space-between; align-items: center; padding-top: 16px; }
 h1 { font-size: 1.4rem; margin: 0; }
@@ -26,13 +52,13 @@ nav button { background: none; color: var(--muted); border: 0; border-bottom: 2p
 nav button.ativa { color: var(--pri); border-bottom-color: var(--pri); }
 main { padding-top: 16px; padding-bottom: 32px; }
 
-button { background: var(--pri); color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font: inherit; cursor: pointer; }
-button.sec { background: #e9ecf2; color: var(--txt); }
+button { background: var(--pri); color: var(--sobre-pri); border: 0; border-radius: 8px; padding: 8px 14px; font: inherit; cursor: pointer; }
+button.sec { background: var(--sutil); color: var(--txt); }
 button.mini { padding: 2px 8px; font-size: .85rem; }
 button.del { background: none; color: var(--muted); padding: 2px 6px; }
 button.del:hover { color: var(--erro); }
 button.link, label.link { background: none; color: var(--pri); padding: 0; cursor: pointer; }
-input, select { font: inherit; padding: 7px 9px; border: 1px solid var(--borda); border-radius: 8px; background: #fff; min-width: 0; }
+input, select { font: inherit; padding: 7px 9px; border: 1px solid var(--borda); border-radius: 8px; background: var(--card); min-width: 0; }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
 .card { background: var(--card); border: 1px solid var(--borda); border-radius: 12px; padding: 14px; }
@@ -47,7 +73,7 @@ input, select { font: inherit; padding: 7px 9px; border: 1px solid var(--borda);
 
 .lista-cat { list-style: none; padding: 0; margin: 0; }
 .lista-cat li { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 8px 0; border-bottom: 1px solid var(--borda); }
-.lista-cat .mini-barra { grid-column: 1 / -1; height: 6px; background: #e9ecf2; border-radius: 3px; overflow: hidden; }
+.lista-cat .mini-barra { grid-column: 1 / -1; height: 6px; background: var(--sutil); border-radius: 3px; overflow: hidden; }
 .lista-cat .mini-barra div { height: 100%; background: var(--pri); }
 
 .form { display: flex; flex-wrap: wrap; gap: 8px; background: var(--card); border: 1px solid var(--borda); border-radius: 12px; padding: 12px; margin-bottom: 16px; }
@@ -58,11 +84,11 @@ input, select { font: inherit; padding: 7px 9px; border: 1px solid var(--borda);
 .tabela-wrap { overflow-x: auto; }
 .tabela { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 12px; overflow: hidden; }
 .tabela th, .tabela td { padding: 8px 10px; border-bottom: 1px solid var(--borda); text-align: left; font-size: .92rem; }
-.tabela th { color: var(--muted); font-weight: 500; background: #fafbfc; }
+.tabela th { color: var(--muted); font-weight: 500; background: var(--cab); }
 .num { text-align: right !important; white-space: nowrap; }
-.tag { font-size: .78rem; padding: 2px 8px; border-radius: 10px; background: #e9ecf2; white-space: nowrap; }
-.tag.ess { background: #dff3ea; color: #1d6e4a; } .tag.nao { background: #fbe8d9; color: #9a4f17; }
-.tag.pago { background: #dff3ea; color: #1d6e4a; } .tag.pendente { background: #fbe8d9; color: #9a4f17; }
+.tag { font-size: .78rem; padding: 2px 8px; border-radius: 10px; background: var(--sutil); white-space: nowrap; }
+.tag.ess { background: var(--ess-bg); color: var(--ess-fg); } .tag.nao { background: var(--nao-bg); color: var(--nao-fg); }
+.tag.pago { background: var(--ess-bg); color: var(--ess-fg); } .tag.pendente { background: var(--nao-bg); color: var(--nao-fg); }
 .vazio, .dica { color: var(--muted); }
 .erro { color: var(--erro); }
 
@@ -76,16 +102,16 @@ input, select { font: inherit; padding: 7px 9px; border: 1px solid var(--borda);
 .revisao tr.off td:not(:first-child) { opacity: .4; }
 .revisao .aviso { display: block; font-size: .75rem; color: var(--nao); }
 .toggle { display: inline-flex; border: 1px solid var(--borda); border-radius: 8px; overflow: hidden; }
-.toggle button { background: #fff; color: var(--muted); border-radius: 0; padding: 4px 10px; }
-.toggle button.on.sim { background: var(--ess); color: #fff; }
-.toggle button.on.nao { background: var(--nao); color: #fff; }
+.toggle button { background: var(--card); color: var(--muted); border-radius: 0; padding: 4px 10px; }
+.toggle button.on.sim { background: var(--ess); color: var(--sobre-pri); }
+.toggle button.on.nao { background: var(--nao); color: var(--sobre-pri); }
 .toggle.vazio-sel { border-color: var(--erro); }
 .acoes-lote { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-.acoes-lote button { background: #e9ecf2; color: var(--txt); font-size: .85rem; }
+.acoes-lote button { background: var(--sutil); color: var(--txt); font-size: .85rem; }
 .acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 
 footer { color: var(--muted); font-size: .85rem; padding-bottom: 24px; text-align: center; }
-#toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--txt); color: #fff; padding: 10px 16px; border-radius: 8px; }
+#toast { position: fixed; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); background: var(--txt); color: var(--bg); max-width: calc(100% - 32px); padding: 10px 16px; border-radius: 8px; }
 
 @media (max-width: 640px) {
   .tabela:not(.revisao) th:nth-child(4), .tabela:not(.revisao) td:nth-child(4) { display: none; }
@@ -109,10 +135,17 @@ footer { color: var(--muted); font-size: .85rem; padding-bottom: 24px; text-alig
 .revisao td.tipo { min-width: 170px; }
 .revisao .vinculo { margin-top: 4px; font-size: .82rem; }
 .revisao input.falta { border-color: var(--erro); }
-.revisao tr.linha-emp td { background: #f4f1fd; }
+.revisao tr.linha-emp td { background: var(--emp-bg); }
 
 /* --- nuvem e tutorial --- */
 .status-nuvem { font-size: .8rem; font-weight: 500; color: var(--muted); margin-left: 6px; }
 .tutorial ol > li { margin-bottom: 14px; }
 .tutorial li { line-height: 1.5; }
 .bloco ul { padding-left: 20px; }
+
+/* --- confirmação dentro do app --- */
+#modal { position: fixed; inset: 0; background: var(--sombra); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 20; }
+.modal-caixa { background: var(--card); border: 1px solid var(--borda); border-radius: 12px; padding: 18px; max-width: 380px; width: 100%; }
+.modal-caixa p { margin: 0 0 8px; line-height: 1.4; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--pri); outline-offset: 2px; }
+button.link { font: inherit; }

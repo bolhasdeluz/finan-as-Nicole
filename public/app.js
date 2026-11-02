@@ -81,7 +81,22 @@ function carregar() {
 }
 
 let estado = carregar();
-function salvar() { localStorage.setItem(CHAVE, JSON.stringify(estado)); agendarEnvio(); }
+/** grava no navegador sem quebrar quando o armazenamento estiver bloqueado */
+function guardar(chave, valor) {
+  try { if (valor === null) localStorage.removeItem(chave); else localStorage.setItem(chave, valor); } catch (e) { /* sem armazenamento */ }
+}
+function salvar() { guardar(CHAVE, JSON.stringify(estado)); agendarEnvio(); }
+
+/** confirmação dentro do app (o navegador pode bloquear a janela nativa) */
+function confirmar(msg, textoSim = 'Confirmar') {
+  return new Promise((resolve) => {
+    const m = $('#modal'), sim = $('#modal-sim'), nao = $('#modal-nao');
+    $('#modal-msg').textContent = msg; sim.textContent = textoSim; m.hidden = false; sim.focus();
+    const fim = (v) => { m.hidden = true; sim.onclick = nao.onclick = m.onkeydown = null; resolve(v); };
+    sim.onclick = () => fim(true); nao.onclick = () => fim(false);
+    m.onkeydown = (e) => { if (e.key === 'Escape') fim(false); };
+  });
+}
 
 const anoMes = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 const hojeISO = () => `${anoMes(new Date())}-${String(new Date().getDate()).padStart(2, '0')}`;
@@ -418,11 +433,11 @@ $('#mes-prox').onclick = () => mudarMes(1);
 /* ================= Ações comuns ================= */
 
 // excluir lançamento / alternar essencial (vale para todas as abas)
-document.querySelector('main').addEventListener('click', (e) => {
+document.querySelector('main').addEventListener('click', async (e) => {
   const del = e.target.closest('[data-del-lanc]');
   const tog = e.target.closest('[data-toggle-ess]');
   if (del) {
-    if (!confirm('Excluir este lançamento?')) return;
+    if (!await confirmar('Excluir este lançamento?')) return;
     estado.lancamentos = estado.lancamentos.filter((l) => l.id !== del.dataset.delLanc);
   } else if (tog) {
     const l = estado.lancamentos.find((x) => x.id === tog.dataset.toggleEss);
@@ -482,7 +497,7 @@ $('#form-cartao').addEventListener('submit', (e) => {
   salvar(); f.reset(); render(); ajustarFormLanc(); toast('Cartão cadastrado');
 });
 
-$('#lista-cartoes').addEventListener('click', (e) => {
+$('#lista-cartoes').addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b) return;
   const d = b.dataset;
   const c = cartaoPorId(d.pagarFatura || d.desfazerFatura || d.delCartao || d.importarFatura);
@@ -494,7 +509,7 @@ $('#lista-cartoes').addEventListener('click', (e) => {
     const p = doMes(mesAtual).find((l) => l.tipo === 'fatura' && l.cartaoId === c.id);
     estado.lancamentos = estado.lancamentos.filter((l) => l !== p);
   } else if (d.delCartao) {
-    if (!confirm(`Excluir o cartão "${c.nome}"? (As compras já lançadas continuam.)`)) return;
+    if (!await confirmar(`Excluir o cartão "${c.nome}"? (As compras já lançadas continuam.)`)) return;
     estado.cartoes = estado.cartoes.filter((x) => x !== c);
   } else if (d.importarFatura) {
     document.querySelector('input[name=origem][value=cartao]').checked = true;
@@ -519,7 +534,7 @@ $('#form-fixa').addEventListener('submit', (e) => {
   render(); toast('Conta fixa cadastrada');
 });
 
-$('#tb-fixas').addEventListener('click', (e) => {
+$('#tb-fixas').addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b) return;
   const id = b.dataset.pagar || b.dataset.desfazer || b.dataset.delFixa;
   const fixa = estado.fixas.find((f) => f.id === id);
@@ -533,7 +548,7 @@ $('#tb-fixas').addEventListener('click', (e) => {
     const p = vinculado('fixaId', id, mesAtual);
     estado.lancamentos = estado.lancamentos.filter((l) => l !== p);
   } else if (b.dataset.delFixa) {
-    if (!confirm(`Excluir a conta fixa "${fixa.nome}"? (Os lançamentos já feitos continuam.)`)) return;
+    if (!await confirmar(`Excluir a conta fixa "${fixa.nome}"? (Os lançamentos já feitos continuam.)`)) return;
     estado.fixas = estado.fixas.filter((f) => f.id !== id);
     estado.lancamentos.forEach((l) => { if (l.fixaId === id) delete l.fixaId; });
   }
@@ -551,7 +566,7 @@ $('#form-renda').addEventListener('submit', (e) => {
   salvar(); f.reset(); render(); toast('Renda cadastrada');
 });
 
-$('#tb-rendas').addEventListener('click', (e) => {
+$('#tb-rendas').addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b) return;
   const id = b.dataset.receber || b.dataset.desfazerRenda || b.dataset.delRenda;
   const r = estado.rendas.find((x) => x.id === id);
@@ -562,7 +577,7 @@ $('#tb-rendas').addEventListener('click', (e) => {
     const p = vinculado('rendaId', id, mesAtual);
     estado.lancamentos = estado.lancamentos.filter((l) => l !== p);
   } else if (b.dataset.delRenda) {
-    if (!confirm(`Excluir a renda "${r.nome}"? (As entradas já lançadas continuam.)`)) return;
+    if (!await confirmar(`Excluir a renda "${r.nome}"? (As entradas já lançadas continuam.)`)) return;
     estado.rendas = estado.rendas.filter((x) => x !== r);
     estado.lancamentos.forEach((l) => { if (l.rendaId === id) delete l.rendaId; });
   }
@@ -604,6 +619,18 @@ document.querySelectorAll('input[name=origem]').forEach((r) => r.addEventListene
 $('#imp-cartao').onchange = (e) => { importacao.cartaoId = e.target.value; };
 $('#imp-mes').onchange = (e) => { importacao.mes = e.target.value; };
 
+const MODELO_CSV = `${CABECALHO}
+05/11/2026;Aluguel;1500,00;fixa;Moradia;sim;;
+05/11/2026;Salário Empresa X;4200,00;renda;;;;
+07/11/2026;Supermercado Extra;312,45;flexivel;Mercado;sim;;
+12/11/2026;Pix para Maria Souza;200,00;emprestimo-saiu;;;Maria Souza;
+25/11/2026;Pix de Maria Souza;200,00;emprestimo-entrou;;;Maria Souza;
+10/11/2026;Pagamento fatura Nubank;980,00;fatura;;;;
+`;
+$('#copiar-modelo').onclick = async () => {
+  try { await navigator.clipboard.writeText(MODELO_CSV); toast('Modelo copiado! Cole no chat da IA junto com o pedido.'); }
+  catch { toast('Não foi possível copiar'); }
+};
 $('#copiar-prompt').onclick = async () => {
   try { await navigator.clipboard.writeText($('#prompt-ia').textContent); toast('Pedido copiado!'); }
   catch { toast('Não foi possível copiar — selecione o texto manualmente'); }
@@ -817,7 +844,7 @@ $('#restaurar').addEventListener('change', async (e) => {
   try {
     const s = JSON.parse(await arq.text());
     if (!Array.isArray(s.lancamentos) || !Array.isArray(s.fixas)) throw new Error();
-    if (!confirm('Substituir todos os dados atuais pelo backup?')) return;
+    if (!await confirmar('Substituir todos os dados atuais pelo backup?')) return;
     estado = { ...estadoVazio(), ...s }; salvar(); render(); ajustarFormLanc(); toast('Backup restaurado');
   } catch { toast('Arquivo de backup inválido'); }
 });
@@ -831,10 +858,17 @@ $('#restaurar').addEventListener('change', async (e) => {
  */
 
 const CHAVE_NUVEM = 'financas-nicole-nuvem';
-const API_NUVEM = location.protocol.startsWith('http') ? '/api/cofre/' : null;
+let API_NUVEM = null; // definido por detectarNuvem() quando o servidor do app responde
+async function detectarNuvem() {
+  if (!location.protocol.startsWith('http')) return;
+  try {
+    const r = await fetch('/api/ping', { cache: 'no-store' });
+    if (r.ok && (await r.json()).ok) API_NUVEM = '/api/cofre/';
+  } catch (e) { /* sem servidor (ex.: prévia) */ }
+}
 let nuvem = null; // { usuario, id, token, chave (base64), versao, pendente, sincronizadoEm }
 try { nuvem = JSON.parse(localStorage.getItem(CHAVE_NUVEM)); } catch (e) { nuvem = null; }
-const salvarNuvem = () => (nuvem ? localStorage.setItem(CHAVE_NUVEM, JSON.stringify(nuvem)) : localStorage.removeItem(CHAVE_NUVEM));
+const salvarNuvem = () => guardar(CHAVE_NUVEM, nuvem ? JSON.stringify(nuvem) : null);
 
 const paraHex = (b) => [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
 const paraB64 = (b) => btoa(String.fromCharCode(...b));
@@ -909,7 +943,7 @@ async function baixarNuvem(forcar = false) {
   if (status !== 200) throw new Error('falha ' + status);
   if (forcar || corpo.versao > nuvem.versao) {
     estado = { ...estadoVazio(), ...(await decifrar(corpo.dados)) };
-    localStorage.setItem(CHAVE, JSON.stringify(estado));
+    guardar(CHAVE, JSON.stringify(estado));
     nuvem.versao = corpo.versao; nuvem.pendente = false; nuvem.sincronizadoEm = corpo.atualizadoEm;
     render();
   }
@@ -967,9 +1001,9 @@ $('#form-nuvem').addEventListener('submit', async (e) => {
       let dados;
       try { dados = await decifrar(corpo.dados); } catch { nuvem = null; msg.textContent = 'Usuário ou senha incorretos.'; return; }
       const temLocal = estado.lancamentos.length || estado.fixas.length || estado.rendas.length || estado.cartoes.length;
-      if (temLocal && !confirm('Substituir os dados deste aparelho pelos dados da nuvem?')) { nuvem = null; msg.textContent = ''; return; }
+      if (temLocal && !await confirmar('Substituir os dados deste aparelho pelos dados da nuvem?')) { nuvem = null; msg.textContent = ''; return; }
       estado = { ...estadoVazio(), ...dados };
-      localStorage.setItem(CHAVE, JSON.stringify(estado));
+      guardar(CHAVE, JSON.stringify(estado));
       nuvem.versao = corpo.versao; nuvem.sincronizadoEm = corpo.atualizadoEm;
       render(); ajustarFormLanc(); toast('Dados carregados da nuvem');
     }
@@ -982,9 +1016,9 @@ $('#form-nuvem').addEventListener('submit', async (e) => {
 });
 
 $('#nuvem-sync').onclick = async () => { await sincronizar(); toast(nuvem && !nuvem.pendente ? 'Sincronizado' : 'Não foi possível sincronizar agora'); };
-$('#nuvem-sair').onclick = () => {
-  if (nuvem.pendente && !confirm('Há alterações ainda não enviadas. Sair mesmo assim?')) return;
-  if (!confirm('Sair da nuvem neste aparelho? Os dados continuam aqui e na nuvem.')) return;
+$('#nuvem-sair').onclick = async () => {
+  if (nuvem.pendente && !await confirmar('Há alterações ainda não enviadas. Sair mesmo assim?')) return;
+  if (!await confirmar('Sair da nuvem neste aparelho? Os dados continuam aqui e na nuvem.')) return;
   nuvem = null; chaveCache = null; salvarNuvem(); renderNuvem();
 };
 window.addEventListener('online', sincronizar);
@@ -993,6 +1027,6 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) sinc
 render();
 ajustarFormLanc();
 renderNuvem();
-sincronizar();
+detectarNuvem().then(() => { renderNuvem(); sincronizar(); });
 // primeira vez abrindo o app: mostra o tutorial
 if (!nuvem && !estado.lancamentos.length && !estado.fixas.length && !estado.rendas.length && !estado.cartoes.length) irPara('ajuda');
