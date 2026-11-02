@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Finanças da Nicole</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>Finanças</h1>
+    <div class="mes">
+      <button id="mes-ant" aria-label="Mês anterior">‹</button>
+      <span id="mes-label"></span>
+      <button id="mes-prox" aria-label="Próximo mês">›</button>
+    </div>
+  </header>
+
+  <nav>
+    <button data-aba="resumo" class="ativa">Resumo</button>
+    <button data-aba="lancamentos">Lançamentos</button>
+    <button data-aba="fixas">Contas fixas</button>
+    <button data-aba="importar">Importar</button>
+  </nav>
+
+  <main>
+    <!-- RESUMO -->
+    <section id="aba-resumo" class="aba">
+      <div class="cards">
+        <div class="card"><small>Total gasto</small><strong id="r-total"></strong></div>
+        <div class="card"><small>Contas fixas</small><strong id="r-fixas"></strong></div>
+        <div class="card"><small>Flexíveis</small><strong id="r-flex"></strong></div>
+        <div class="card"><small>Fixas a pagar</small><strong id="r-apagar"></strong></div>
+      </div>
+
+      <h2>Essencial × Não essencial</h2>
+      <div class="barra"><div id="r-barra-ess"></div></div>
+      <p class="legenda">
+        <span class="dot ess"></span> Essencial <b id="r-ess"></b>
+        &nbsp;·&nbsp;
+        <span class="dot nao"></span> Não essencial <b id="r-nao"></b>
+      </p>
+
+      <h2>Por categoria</h2>
+      <ul id="r-categorias" class="lista-cat"></ul>
+    </section>
+
+    <!-- LANÇAMENTOS -->
+    <section id="aba-lancamentos" class="aba" hidden>
+      <form id="form-lanc" class="form">
+        <input type="date" name="data" required>
+        <input name="descricao" placeholder="Descrição" required>
+        <input name="valor" placeholder="Valor (ex.: 45,90)" inputmode="decimal" required>
+        <input name="categoria" placeholder="Categoria" list="lista-categorias" required>
+        <select name="tipo">
+          <option value="flexivel">Flexível</option>
+          <option value="fixa">Fixa</option>
+        </select>
+        <label class="check"><input type="checkbox" name="essencial"> Essencial</label>
+        <button type="submit">Adicionar</button>
+      </form>
+      <table class="tabela">
+        <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Tipo</th><th>Essencial</th><th class="num">Valor</th><th></th></tr></thead>
+        <tbody id="tb-lanc"></tbody>
+      </table>
+      <p id="lanc-vazio" class="vazio">Nenhum lançamento neste mês.</p>
+    </section>
+
+    <!-- CONTAS FIXAS -->
+    <section id="aba-fixas" class="aba" hidden>
+      <p class="dica">Cadastre aqui as contas que se repetem todo mês. Marque como paga a cada mês
+        (ou vincule ao importar o extrato).</p>
+      <form id="form-fixa" class="form">
+        <input name="nome" placeholder="Nome (ex.: Aluguel)" required>
+        <input name="valor" placeholder="Valor previsto" inputmode="decimal" required>
+        <input name="dia" type="number" min="1" max="31" placeholder="Dia venc.">
+        <input name="categoria" placeholder="Categoria" list="lista-categorias" required>
+        <label class="check"><input type="checkbox" name="essencial" checked> Essencial</label>
+        <button type="submit">Cadastrar</button>
+      </form>
+      <table class="tabela">
+        <thead><tr><th>Conta</th><th>Venc.</th><th>Categoria</th><th class="num">Previsto</th><th class="num">Pago</th><th>Status</th><th></th></tr></thead>
+        <tbody id="tb-fixas"></tbody>
+      </table>
+      <p id="fixas-vazio" class="vazio">Nenhuma conta fixa cadastrada.</p>
+    </section>
+
+    <!-- IMPORTAR -->
+    <section id="aba-importar" class="aba" hidden>
+      <div id="imp-inicio">
+        <ol class="passos">
+          <li><a href="modelo-importacao.csv" download>Baixe o modelo de planilha</a>.</li>
+          <li>No chat da IA, anexe seu extrato bancário + o modelo e cole este pedido:
+            <div class="prompt-box">
+              <pre id="prompt-ia"></pre>
+              <button id="copiar-prompt" type="button">Copiar pedido</button>
+            </div>
+          </li>
+          <li>Baixe o CSV que a IA devolver e selecione aqui:
+            <input type="file" id="arquivo" accept=".csv,text/csv,text/plain">
+          </li>
+        </ol>
+        <p id="imp-erro" class="erro" hidden></p>
+      </div>
+
+      <div id="imp-revisao" hidden>
+        <h2>Revisão da importação</h2>
+        <p class="dica">Confira cada linha: ajuste a categoria, o tipo e marque o que foi essencial.
+          Linhas desmarcadas não serão salvas.</p>
+        <div class="acoes-lote">
+          <button type="button" id="todos-ess">Marcar todos essenciais</button>
+          <button type="button" id="todos-nao">Marcar todos não essenciais</button>
+        </div>
+        <div class="tabela-wrap">
+          <table class="tabela revisao">
+            <thead><tr><th>Salvar</th><th>Data</th><th>Descrição</th><th class="num">Valor</th><th>Categoria</th><th>Tipo</th><th>Essencial?</th></tr></thead>
+            <tbody id="tb-revisao"></tbody>
+          </table>
+        </div>
+        <p id="rev-resumo" class="legenda"></p>
+        <div class="acoes">
+          <button type="button" id="cancelar-imp" class="sec">Cancelar</button>
+          <button type="button" id="confirmar-imp">Salvar lançamentos</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <button id="exportar" class="link">Fazer backup</button> ·
+    <label class="link">Restaurar backup<input type="file" id="restaurar" accept=".json" hidden></label>
+  </footer>
+
+  <datalist id="lista-categorias"></datalist>
+  <div id="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

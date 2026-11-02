@@ -1,0 +1,4 @@
+data;descricao;valor;categoria;tipo;essencial
+05/11/2026;Aluguel;1500,00;Moradia;fixa;sim
+07/11/2026;Supermercado Extra;312,45;Mercado;flexivel;sim
+08/11/2026;iFood;58,90;Restaurante/Delivery;flexivel;nao
