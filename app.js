@@ -9,32 +9,73 @@ const CATEGORIAS_PADRAO = [
   'Impostos/Taxas', 'Outros',
 ];
 
-const PROMPT_IA = `Anexei meu extrato bancário e um modelo de planilha (modelo-importacao.csv).
-Preencha o modelo com os GASTOS (saídas) do extrato, seguindo estas regras:
+const TIPOS = {
+  flexivel: 'Gasto flexível',
+  fixa: 'Gasto fixo',
+  renda: 'Renda / entrada',
+  'emp-saiu': 'Empréstimo — saiu',
+  'emp-entrou': 'Empréstimo — entrou',
+  fatura: 'Pagamento de fatura',
+};
+const TIPOS_CARTAO = ['flexivel', 'fixa', 'emp-saiu'];
+const ehGasto = (l) => l.tipo === 'fixa' || l.tipo === 'flexivel';
+const ehEmp = (l) => l.tipo === 'emp-saiu' || l.tipo === 'emp-entrou';
 
-- Mantenha exatamente o cabeçalho: data;descricao;valor;categoria;tipo;essencial
-- Separador: ponto e vírgula (;)
-- data: formato DD/MM/AAAA
+const CABECALHO = 'data;descricao;valor;tipo;categoria;essencial;pessoa;parcela';
+const REGRAS_GASTO = `- categoria (só para fixa e flexivel): use uma destas: ${CATEGORIAS_PADRAO.join(', ')}
+- essencial (só para fixa e flexivel): "sim" se for necessidade (moradia, contas, mercado, saúde, transporte para trabalho); "nao" se for supérfluo (delivery, lazer, compras por impulso)`;
+
+const PROMPT_CONTA = `Anexei meu extrato bancário e um modelo de planilha (modelo-importacao.csv).
+Preencha o modelo com as movimentações do extrato, uma por linha, seguindo estas regras:
+
+- Mantenha exatamente o cabeçalho: ${CABECALHO}
+- Separador: ponto e vírgula (;). data no formato DD/MM/AAAA
+- valor: SEMPRE positivo, com vírgula decimal, sem "R$" (ex.: 1234,56)
 - descricao: nome do estabelecimento/pagamento, curto e legível
-- valor: número positivo com vírgula decimal, sem "R$" (ex.: 1234,56)
-- categoria: use uma destas: ${CATEGORIAS_PADRAO.join(', ')}
-- tipo: "fixa" para contas que se repetem todo mês (aluguel, condomínio, luz, água, internet, celular, escola, plano de saúde, assinaturas); "flexivel" para o resto
-- essencial: "sim" se for necessidade (moradia, contas, mercado, saúde, transporte para trabalho); "nao" se for supérfluo (delivery, lazer, compras por impulso)
-- NÃO inclua entradas (salário, Pix recebido, estornos) nem transferências entre contas da mesma pessoa
+- tipo, escolha um:
+  • fixa: gasto que se repete todo mês (aluguel, condomínio, luz, água, internet, celular, escola, plano de saúde, assinaturas)
+  • flexivel: os demais gastos
+  • renda: dinheiro que entrou e é meu (salário, freelas, pensão, rendimentos)
+  • emprestimo-saiu: dinheiro que saiu como empréstimo para alguém, ou que eu devolvi para quem me emprestou
+  • emprestimo-entrou: dinheiro que alguém me devolveu de um empréstimo, ou que eu peguei emprestado
+  • fatura: pagamento da fatura do cartão de crédito
+- Para achar empréstimos: procure Pix/TED para a mesma pessoa física que sai e depois volta (ou entra e depois sai) com valores parecidos, ou descrições como "empréstimo", "devolução", "te devolvo". Na dúvida, marque como empréstimo; eu confirmo na revisão.
+- pessoa: nome da pessoa, só nas linhas de empréstimo
+${REGRAS_GASTO}
+- parcela: deixe em branco
+- NÃO inclua transferências entre contas minhas nem aplicações/resgates de investimento
+- Apague as linhas de exemplo do modelo
+
+Devolva apenas o arquivo .csv preenchido, pronto para download.`;
+
+const PROMPT_CARTAO = `Anexei a fatura do meu cartão de crédito e um modelo de planilha (modelo-importacao.csv).
+Preencha o modelo com as COMPRAS da fatura, uma por linha, seguindo estas regras:
+
+- Mantenha exatamente o cabeçalho: ${CABECALHO}
+- Separador: ponto e vírgula (;). data no formato DD/MM/AAAA (data da compra)
+- valor: SEMPRE positivo, com vírgula decimal, sem "R$" (ex.: 1234,56)
+- descricao: nome do estabelecimento, curto e legível
+- tipo, escolha um:
+  • fixa: cobrança que se repete todo mês (assinaturas, streaming, academia, seguro)
+  • flexivel: as demais compras
+  • emprestimo-saiu: compra que fiz para outra pessoa e que ela vai me pagar de volta (na dúvida, use flexivel)
+- pessoa: nome da pessoa, só nas linhas de emprestimo-saiu
+${REGRAS_GASTO}
+- parcela: se a compra for parcelada, a parcela atual no formato 3/10; senão deixe em branco
+- Inclua juros, IOF, multa e anuidade com a categoria Impostos/Taxas
+- NÃO inclua o pagamento da fatura anterior nem créditos/estornos (se houver estorno, remova também a compra estornada)
 - Apague as linhas de exemplo do modelo
 
 Devolva apenas o arquivo .csv preenchido, pronto para download.`;
 
 function estadoVazio() {
-  return { lancamentos: [], fixas: [], memoria: {} };
+  return { lancamentos: [], fixas: [], rendas: [], cartoes: [], memoria: {} };
 }
 
 function carregar() {
   try {
     const s = JSON.parse(localStorage.getItem(CHAVE));
-    if (s && Array.isArray(s.lancamentos) && Array.isArray(s.fixas)) {
-      return { ...estadoVazio(), ...s };
-    }
+    if (s && Array.isArray(s.lancamentos) && Array.isArray(s.fixas)) return { ...estadoVazio(), ...s };
   } catch (e) { /* ignora */ }
   return estadoVazio();
 }
@@ -42,9 +83,11 @@ function carregar() {
 let estado = carregar();
 function salvar() { localStorage.setItem(CHAVE, JSON.stringify(estado)); }
 
-const hoje = new Date();
-let mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`; // AAAA-MM
+const anoMes = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+const hojeISO = () => `${anoMes(new Date())}-${String(new Date().getDate()).padStart(2, '0')}`;
+let mesAtual = anoMes(new Date()); // AAAA-MM
 let revisao = []; // linhas em revisão na importação
+let importacao = { origem: 'conta', cartaoId: '', mes: '' };
 
 /* ================= Utilidades ================= */
 
@@ -53,7 +96,13 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 const brl = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const dataBR = (iso) => iso ? iso.split('-').reverse().join('/') : '';
+const dataBR = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
+const soma = (arr) => arr.reduce((t, l) => t + l.valor, 0);
+const nomeMes = (ym) => {
+  const [a, m] = ym.split('-');
+  const s = new Date(+a, +m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
 
 function toast(msg) {
   const t = $('#toast');
@@ -100,7 +149,17 @@ function parseEssencial(txt) {
   return null;
 }
 
-const parseTipo = (txt) => (norm(txt).startsWith('fix') ? 'fixa' : 'flexivel');
+function parseTipo(txt) {
+  const s = norm(txt);
+  if (!s) return '';
+  if (s.includes('emprest') || s.startsWith('emp')) {
+    return /entr|volt|receb|peguei/.test(s) ? 'emp-entrou' : 'emp-saiu';
+  }
+  if (s.startsWith('fix')) return 'fixa';
+  if (s.includes('fatura')) return 'fatura';
+  if (/^(renda|entrada|receita|salario)/.test(s)) return 'renda';
+  return 'flexivel';
+}
 
 /** CSV simples com suporte a aspas; detecta ; , ou TAB */
 function parseCSV(texto) {
@@ -131,48 +190,104 @@ function categorias() {
   estado.fixas.forEach((f) => f.categoria && set.add(f.categoria));
   return [...set];
 }
+const pessoas = () => [...new Set(estado.lancamentos.filter(ehEmp).map((l) => l.pessoa))].sort();
 
-const doMes = (mes) => estado.lancamentos.filter((l) => l.data.startsWith(mes));
-const pagamentoDaFixa = (fixaId, mes) => doMes(mes).find((l) => l.fixaId === fixaId);
+/** mês em que o lançamento conta (compras no cartão contam no mês de vencimento da fatura) */
+const mesDe = (l) => l.mes || l.data.slice(0, 7);
+const doMes = (mes) => estado.lancamentos.filter((l) => mesDe(l) === mes);
+const vinculado = (campo, id, mes) => doMes(mes).find((l) => l[campo] === id);
+const cartaoPorId = (id) => estado.cartoes.find((c) => c.id === id);
 
-/** acha conta fixa cadastrada cujo nome aparece na descrição (ou vice-versa) */
-function sugerirFixa(descricao) {
+/** mês (AAAA-MM) da fatura em que cai uma compra feita na data informada */
+function mesDaFatura(cartao, dataISO) {
+  const [a, m, d] = dataISO.split('-').map(Number);
+  let idx = m - 1 + (d >= cartao.fechamento ? 1 : 0); // mês em que a fatura fecha
+  if (cartao.vencimento <= cartao.fechamento) idx += 1; // vence no mês seguinte ao fechamento
+  return anoMes(new Date(a, idx, 1));
+}
+
+/** item cadastrado cujo nome aparece na descrição (ou vice-versa) */
+function sugerir(lista, descricao, campo = 'nome') {
   const d = norm(descricao);
-  return estado.fixas.find((f) => { const n = norm(f.nome); return n && (d.includes(n) || n.includes(d)); });
+  return lista.find((x) => { const n = norm(x[campo]); return n && (d.includes(n) || n.includes(d)); });
+}
+
+/** saldo por pessoa: positivo = a pessoa te deve; negativo = você deve */
+function saldosEmprestimos() {
+  const s = {};
+  estado.lancamentos.filter(ehEmp).forEach((l) => {
+    s[l.pessoa] = (s[l.pessoa] || 0) + (l.tipo === 'emp-saiu' ? l.valor : -l.valor);
+  });
+  return s;
 }
 
 /* ================= Render ================= */
 
 function render() {
-  const [a, m] = mesAtual.split('-');
-  const rotulo = new Date(+a, +m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-  $('#mes-label').textContent = rotulo.charAt(0).toUpperCase() + rotulo.slice(1);
+  $('#mes-label').textContent = nomeMes(mesAtual);
   $('#lista-categorias').innerHTML = categorias().map((c) => `<option value="${esc(c)}">`).join('');
-  renderResumo(); renderLancamentos(); renderFixas();
+  $('#lista-pessoas').innerHTML = pessoas().map((p) => `<option value="${esc(p)}">`).join('');
+  $('#form-lanc').forma.innerHTML = '<option value="">Pago na conta</option>'
+    + estado.cartoes.map((c) => `<option value="${c.id}">Cartão ${esc(c.nome)}</option>`).join('');
+  renderResumo(); renderLancamentos(); renderCartoes(); renderFixas(); renderRendas(); renderEmprestimos();
+  renderOrigemImportacao();
 }
 
 function renderResumo() {
   const ls = doMes(mesAtual);
-  const soma = (arr) => arr.reduce((t, l) => t + l.valor, 0);
-  const total = soma(ls);
-  const ess = soma(ls.filter((l) => l.essencial));
-  const aPagar = estado.fixas.filter((f) => !pagamentoDaFixa(f.id, mesAtual)).reduce((t, f) => t + f.valor, 0);
+  const gastos = ls.filter(ehGasto);
+  const total = soma(gastos);
+  const ess = soma(gastos.filter((l) => l.essencial));
+  const fixasAPagar = estado.fixas.filter((f) => !vinculado('fixaId', f.id, mesAtual)).reduce((t, f) => t + f.valor, 0);
+  const renda = soma(ls.filter((l) => l.tipo === 'renda'));
+  const rendaAReceber = estado.rendas.filter((r) => !vinculado('rendaId', r.id, mesAtual)).reduce((t, r) => t + r.valor, 0);
+  const sobra = renda + rendaAReceber - total - fixasAPagar;
 
+  $('#r-renda').textContent = brl(renda);
+  $('#r-renda-prev').textContent = rendaAReceber ? `+ ${brl(rendaAReceber)} a receber` : '';
   $('#r-total').textContent = brl(total);
-  $('#r-fixas').textContent = brl(soma(ls.filter((l) => l.tipo === 'fixa')));
-  $('#r-flex').textContent = brl(soma(ls.filter((l) => l.tipo !== 'fixa')));
-  $('#r-apagar').textContent = brl(aPagar);
+  $('#r-sobra').textContent = brl(sobra);
+  $('#r-sobra').className = sobra < 0 ? 'neg' : 'pos';
+  $('#r-fixas').textContent = brl(soma(gastos.filter((l) => l.tipo === 'fixa')));
+  $('#r-flex').textContent = brl(soma(gastos.filter((l) => l.tipo === 'flexivel')));
+  $('#r-cartao').textContent = brl(soma(gastos.filter((l) => l.cartaoId)));
+  $('#r-apagar').textContent = brl(fixasAPagar);
   $('#r-ess').textContent = brl(ess);
   $('#r-nao').textContent = brl(total - ess);
   $('#r-barra-ess').style.width = total ? `${(ess / total) * 100}%` : '0';
 
+  const saldos = Object.values(saldosEmprestimos());
+  const receber = saldos.filter((v) => v > 0.005).reduce((t, v) => t + v, 0);
+  const pagar = -saldos.filter((v) => v < -0.005).reduce((t, v) => t + v, 0);
+  $('#r-emprestimos').textContent = receber || pagar
+    ? `Empréstimos em aberto: te devem ${brl(receber)} · você deve ${brl(pagar)}` : '';
+
   const porCat = {};
-  ls.forEach((l) => { porCat[l.categoria] = (porCat[l.categoria] || 0) + l.valor; });
+  gastos.forEach((l) => { porCat[l.categoria] = (porCat[l.categoria] || 0) + l.valor; });
   const itens = Object.entries(porCat).sort((x, y) => y[1] - x[1]);
   $('#r-categorias').innerHTML = itens.length
     ? itens.map(([c, v]) => `<li><span>${esc(c)}</span><b>${brl(v)}</b>
         <div class="mini-barra"><div style="width:${(v / itens[0][1]) * 100}%"></div></div></li>`).join('')
     : '<li class="vazio">Sem gastos neste mês.</li>';
+}
+
+function tagEssencial(l) {
+  if (!ehGasto(l)) return '—';
+  return `<button class="mini sec" data-toggle-ess="${l.id}" title="Clique para alternar">
+    <span class="tag ${l.essencial ? 'ess' : 'nao'}">${l.essencial ? 'Essencial' : 'Não essencial'}</span></button>`;
+}
+
+function valorComSinal(l) {
+  const entra = l.tipo === 'renda' || l.tipo === 'emp-entrou';
+  return `<span class="${entra ? 'pos' : ''}">${entra ? '+ ' : ''}${brl(l.valor)}</span>`;
+}
+
+function rotuloTipo(l) {
+  let t = TIPOS[l.tipo] || l.tipo;
+  if (ehEmp(l)) t += ` · ${esc(l.pessoa)}`;
+  const c = l.cartaoId && cartaoPorId(l.cartaoId);
+  if (c) t += ` · 💳 ${esc(c.nome)}`;
+  return t;
 }
 
 function renderLancamentos() {
@@ -181,21 +296,51 @@ function renderLancamentos() {
   $('#tb-lanc').innerHTML = ls.map((l) => `
     <tr>
       <td>${dataBR(l.data)}</td>
-      <td>${esc(l.descricao)}</td>
-      <td>${esc(l.categoria)}</td>
-      <td>${l.tipo === 'fixa' ? 'Fixa' : 'Flexível'}</td>
-      <td><button class="mini sec" data-toggle-ess="${l.id}" title="Clique para alternar">
-        <span class="tag ${l.essencial ? 'ess' : 'nao'}">${l.essencial ? 'Essencial' : 'Não essencial'}</span></button></td>
-      <td class="num">${brl(l.valor)}</td>
+      <td>${esc(l.descricao)}${l.parcela ? ` <small class="legenda">(${esc(l.parcela)})</small>` : ''}</td>
+      <td><small>${rotuloTipo(l)}</small></td>
+      <td>${ehGasto(l) ? esc(l.categoria) : '—'}</td>
+      <td>${tagEssencial(l)}</td>
+      <td class="num">${valorComSinal(l)}</td>
       <td><button class="del" data-del-lanc="${l.id}" title="Excluir">✕</button></td>
     </tr>`).join('');
+}
+
+function renderCartoes() {
+  $('#cartoes-vazio').hidden = estado.cartoes.length > 0;
+  $('#lista-cartoes').innerHTML = estado.cartoes.map((c) => {
+    const compras = doMes(mesAtual).filter((l) => l.cartaoId === c.id && l.tipo !== 'fatura')
+      .sort((x, y) => x.data.localeCompare(y.data));
+    const total = soma(compras);
+    const pago = doMes(mesAtual).find((l) => l.tipo === 'fatura' && l.cartaoId === c.id);
+    return `<div class="bloco">
+      <div class="bloco-topo">
+        <div><b>💳 ${esc(c.nome)}</b>
+          <small class="legenda">fecha dia ${c.fechamento} · vence dia ${c.vencimento}</small></div>
+        <button class="del" data-del-cartao="${c.id}" title="Excluir cartão">✕</button>
+      </div>
+      <p>Fatura de ${nomeMes(mesAtual).toLowerCase()}: <strong>${brl(total)}</strong>
+        ${pago ? `<span class="tag pago">Paga ${brl(pago.valor)}</span> <button class="mini sec" data-desfazer-fatura="${c.id}">desfazer</button>`
+               : `<span class="tag pendente">Em aberto</span> ${total ? `<button class="mini" data-pagar-fatura="${c.id}">marcar paga</button>` : ''}`}
+        <button class="mini sec" data-importar-fatura="${c.id}">Importar fatura</button></p>
+      ${compras.length ? `<div class="tabela-wrap"><table class="tabela">
+        <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Essencial</th><th class="num">Valor</th><th></th></tr></thead>
+        <tbody>${compras.map((l) => `<tr>
+          <td>${dataBR(l.data)}</td>
+          <td>${esc(l.descricao)}${l.parcela ? ` <small class="legenda">(${esc(l.parcela)})</small>` : ''}</td>
+          <td>${ehGasto(l) ? esc(l.categoria) : `<small>${rotuloTipo(l)}</small>`}</td>
+          <td>${tagEssencial(l)}</td>
+          <td class="num">${brl(l.valor)}</td>
+          <td><button class="del" data-del-lanc="${l.id}" title="Excluir">✕</button></td></tr>`).join('')}</tbody>
+      </table></div>` : '<p class="vazio">Nenhuma compra nesta fatura.</p>'}
+    </div>`;
+  }).join('');
 }
 
 function renderFixas() {
   $('#fixas-vazio').hidden = estado.fixas.length > 0;
   const fx = [...estado.fixas].sort((x, y) => (x.dia || 99) - (y.dia || 99));
   $('#tb-fixas').innerHTML = fx.map((f) => {
-    const p = pagamentoDaFixa(f.id, mesAtual);
+    const p = vinculado('fixaId', f.id, mesAtual);
     return `<tr>
       <td>${esc(f.nome)}</td>
       <td>${f.dia ? 'dia ' + f.dia : '—'}</td>
@@ -210,44 +355,74 @@ function renderFixas() {
   }).join('');
 }
 
-/* ================= Ações: navegação ================= */
+function renderRendas() {
+  $('#rendas-vazio').hidden = estado.rendas.length > 0;
+  $('#tb-rendas').innerHTML = [...estado.rendas].sort((x, y) => (x.dia || 99) - (y.dia || 99)).map((r) => {
+    const p = vinculado('rendaId', r.id, mesAtual);
+    return `<tr>
+      <td>${esc(r.nome)}</td>
+      <td>${r.dia ? 'dia ' + r.dia : '—'}</td>
+      <td class="num">${brl(r.valor)}</td>
+      <td class="num">${p ? brl(p.valor) : '—'}</td>
+      <td>${p
+        ? `<span class="tag pago">Recebida</span> <button class="mini sec" data-desfazer-renda="${r.id}">desfazer</button>`
+        : `<span class="tag pendente">A receber</span> <button class="mini" data-receber="${r.id}">marcar recebida</button>`}</td>
+      <td><button class="del" data-del-renda="${r.id}" title="Excluir renda">✕</button></td>
+    </tr>`;
+  }).join('');
+  const ent = doMes(mesAtual).filter((l) => l.tipo === 'renda').sort((x, y) => x.data.localeCompare(y.data));
+  $('#entradas-vazio').hidden = ent.length > 0;
+  $('#tb-entradas').innerHTML = ent.map((l) => `<tr><td>${dataBR(l.data)}</td><td>${esc(l.descricao)}</td>
+    <td class="num pos">${brl(l.valor)}</td></tr>`).join('');
+}
 
-document.querySelectorAll('nav button').forEach((b) => b.addEventListener('click', () => {
-  document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('ativa', x === b));
-  document.querySelectorAll('.aba').forEach((s) => { s.hidden = s.id !== 'aba-' + b.dataset.aba; });
-}));
+function renderEmprestimos() {
+  const saldos = saldosEmprestimos();
+  const nomes = Object.keys(saldos).sort((a, b) => Math.abs(saldos[b]) - Math.abs(saldos[a]));
+  $('#e-receber').textContent = brl(Object.values(saldos).filter((v) => v > 0.005).reduce((t, v) => t + v, 0));
+  $('#e-pagar').textContent = brl(-Object.values(saldos).filter((v) => v < -0.005).reduce((t, v) => t + v, 0));
+  $('#emp-vazio').hidden = nomes.length > 0;
+  $('#lista-pessoas-emp').innerHTML = nomes.map((p) => {
+    const s = saldos[p];
+    const movs = estado.lancamentos.filter((l) => ehEmp(l) && l.pessoa === p).sort((x, y) => y.data.localeCompare(x.data));
+    const status = Math.abs(s) < 0.005 ? '<span class="tag pago">Quitado</span>'
+      : s > 0 ? `<span class="tag ess">te deve ${brl(s)}</span>` : `<span class="tag nao">você deve ${brl(-s)}</span>`;
+    return `<div class="bloco">
+      <div class="bloco-topo"><b>${esc(p)}</b> ${status}</div>
+      <table class="tabela"><tbody>${movs.map((l) => `<tr>
+        <td>${dataBR(l.data)}</td>
+        <td>${l.tipo === 'emp-saiu' ? '↗ saiu' : '↙ entrou'}${l.cartaoId ? ' (cartão)' : ''}</td>
+        <td>${esc(l.descricao)}</td>
+        <td class="num ${l.tipo === 'emp-entrou' ? 'pos' : ''}">${brl(l.valor)}</td>
+        <td><button class="del" data-del-lanc="${l.id}" title="Excluir">✕</button></td></tr>`).join('')}
+      </tbody></table></div>`;
+  }).join('');
+}
+
+/* ================= Navegação ================= */
+
+function irPara(aba) {
+  document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('ativa', x.dataset.aba === aba));
+  document.querySelectorAll('.aba').forEach((s) => { s.hidden = s.id !== 'aba-' + aba; });
+}
+document.querySelectorAll('nav button').forEach((b) => b.addEventListener('click', () => irPara(b.dataset.aba)));
 
 function mudarMes(delta) {
   const [a, m] = mesAtual.split('-').map(Number);
-  const d = new Date(a, m - 1 + delta, 1);
-  mesAtual = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  mesAtual = anoMes(new Date(a, m - 1 + delta, 1));
   render();
 }
 $('#mes-ant').onclick = () => mudarMes(-1);
 $('#mes-prox').onclick = () => mudarMes(1);
 
-/* ================= Ações: lançamentos manuais ================= */
+/* ================= Ações comuns ================= */
 
-$('#form-lanc').data.value = new Date().toISOString().slice(0, 10);
-$('#form-lanc').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const f = e.target;
-  const valor = parseValor(f.valor.value);
-  if (!valor) return toast('Valor inválido');
-  estado.lancamentos.push({
-    id: uid(), data: f.data.value, descricao: f.descricao.value.trim(), valor,
-    categoria: f.categoria.value.trim(), tipo: f.tipo.value, essencial: f.essencial.checked,
-  });
-  salvar();
-  mesAtual = f.data.value.slice(0, 7);
-  f.descricao.value = ''; f.valor.value = ''; f.essencial.checked = false;
-  render(); toast('Lançamento adicionado');
-});
-
-$('#tb-lanc').addEventListener('click', (e) => {
+// excluir lançamento / alternar essencial (vale para todas as abas)
+document.querySelector('main').addEventListener('click', (e) => {
   const del = e.target.closest('[data-del-lanc]');
   const tog = e.target.closest('[data-toggle-ess]');
-  if (del && confirm('Excluir este lançamento?')) {
+  if (del) {
+    if (!confirm('Excluir este lançamento?')) return;
     estado.lancamentos = estado.lancamentos.filter((l) => l.id !== del.dataset.delLanc);
   } else if (tog) {
     const l = estado.lancamentos.find((x) => x.id === tog.dataset.toggleEss);
@@ -256,7 +431,80 @@ $('#tb-lanc').addEventListener('click', (e) => {
   salvar(); render();
 });
 
-/* ================= Ações: contas fixas ================= */
+/** dia "dia" no mês "mes", sem passar do último dia */
+function dataNoMes(mes, dia) {
+  const [a, m] = mes.split('-').map(Number);
+  return `${mes}-${String(Math.min(dia || 1, new Date(a, m, 0).getDate())).padStart(2, '0')}`;
+}
+
+/* ================= Lançamentos manuais ================= */
+
+const formLanc = $('#form-lanc');
+formLanc.data.value = hojeISO();
+function ajustarFormLanc() {
+  const t = formLanc.tipo.value;
+  const gasto = t === 'fixa' || t === 'flexivel';
+  formLanc.querySelectorAll('.so-gasto').forEach((el) => { el.hidden = !gasto; });
+  formLanc.querySelectorAll('.so-emp').forEach((el) => { el.hidden = !t.startsWith('emp'); });
+  formLanc.querySelectorAll('.so-pagto').forEach((el) => { el.hidden = !(gasto || t === 'emp-saiu') || !estado.cartoes.length; });
+}
+formLanc.tipo.addEventListener('change', ajustarFormLanc);
+
+formLanc.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const f = formLanc; const tipo = f.tipo.value;
+  const valor = parseValor(f.valor.value);
+  if (!valor) return toast('Valor inválido');
+  const l = { id: uid(), data: f.data.value, descricao: f.descricao.value.trim(), valor, tipo };
+  if (ehGasto(l)) {
+    if (!f.categoria.value.trim()) return toast('Informe a categoria');
+    l.categoria = f.categoria.value.trim(); l.essencial = f.essencial.checked;
+  }
+  if (ehEmp(l)) {
+    if (!f.pessoa.value.trim()) return toast('Informe a pessoa');
+    l.pessoa = f.pessoa.value.trim();
+  }
+  const cartao = (ehGasto(l) || tipo === 'emp-saiu') && cartaoPorId(f.forma.value);
+  if (cartao) { l.cartaoId = cartao.id; l.mes = mesDaFatura(cartao, l.data); }
+  estado.lancamentos.push(l);
+  salvar();
+  mesAtual = mesDe(l);
+  f.descricao.value = ''; f.valor.value = ''; f.essencial.checked = false;
+  render(); toast(cartao ? `Adicionado na fatura de ${nomeMes(l.mes).toLowerCase()}` : 'Lançamento adicionado');
+});
+
+/* ================= Cartões ================= */
+
+$('#form-cartao').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const f = e.target;
+  estado.cartoes.push({ id: uid(), nome: f.nome.value.trim(), fechamento: +f.fechamento.value, vencimento: +f.vencimento.value });
+  salvar(); f.reset(); render(); ajustarFormLanc(); toast('Cartão cadastrado');
+});
+
+$('#lista-cartoes').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  const d = b.dataset;
+  const c = cartaoPorId(d.pagarFatura || d.desfazerFatura || d.delCartao || d.importarFatura);
+  if (!c) return;
+  if (d.pagarFatura) {
+    const total = soma(doMes(mesAtual).filter((l) => l.cartaoId === c.id && l.tipo !== 'fatura'));
+    estado.lancamentos.push({ id: uid(), data: dataNoMes(mesAtual, c.vencimento), descricao: `Fatura ${c.nome}`, valor: total, tipo: 'fatura', cartaoId: c.id });
+  } else if (d.desfazerFatura) {
+    const p = doMes(mesAtual).find((l) => l.tipo === 'fatura' && l.cartaoId === c.id);
+    estado.lancamentos = estado.lancamentos.filter((l) => l !== p);
+  } else if (d.delCartao) {
+    if (!confirm(`Excluir o cartão "${c.nome}"? (As compras já lançadas continuam.)`)) return;
+    estado.cartoes = estado.cartoes.filter((x) => x !== c);
+  } else if (d.importarFatura) {
+    document.querySelector('input[name=origem][value=cartao]').checked = true;
+    importacao = { origem: 'cartao', cartaoId: c.id, mes: mesAtual };
+    renderOrigemImportacao(); irPara('importar'); return;
+  }
+  salvar(); render(); ajustarFormLanc();
+});
+
+/* ================= Contas fixas ================= */
 
 $('#form-fixa').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -275,16 +523,14 @@ $('#tb-fixas').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   const id = b.dataset.pagar || b.dataset.desfazer || b.dataset.delFixa;
   const fixa = estado.fixas.find((f) => f.id === id);
+  if (!fixa) return;
   if (b.dataset.pagar) {
-    const [a, m] = mesAtual.split('-').map(Number);
-    const ultimoDia = new Date(a, m, 0).getDate();
-    const dia = String(Math.min(fixa.dia || 1, ultimoDia)).padStart(2, '0');
     estado.lancamentos.push({
-      id: uid(), data: `${mesAtual}-${dia}`, descricao: fixa.nome, valor: fixa.valor,
+      id: uid(), data: dataNoMes(mesAtual, fixa.dia), descricao: fixa.nome, valor: fixa.valor,
       categoria: fixa.categoria, tipo: 'fixa', essencial: fixa.essencial, fixaId: fixa.id,
     });
   } else if (b.dataset.desfazer) {
-    const p = pagamentoDaFixa(id, mesAtual);
+    const p = vinculado('fixaId', id, mesAtual);
     estado.lancamentos = estado.lancamentos.filter((l) => l !== p);
   } else if (b.dataset.delFixa) {
     if (!confirm(`Excluir a conta fixa "${fixa.nome}"? (Os lançamentos já feitos continuam.)`)) return;
@@ -294,11 +540,72 @@ $('#tb-fixas').addEventListener('click', (e) => {
   salvar(); render();
 });
 
+/* ================= Renda ================= */
+
+$('#form-renda').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const valor = parseValor(f.valor.value);
+  if (!valor) return toast('Valor inválido');
+  estado.rendas.push({ id: uid(), nome: f.nome.value.trim(), valor, dia: +f.dia.value || null });
+  salvar(); f.reset(); render(); toast('Renda cadastrada');
+});
+
+$('#tb-rendas').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  const id = b.dataset.receber || b.dataset.desfazerRenda || b.dataset.delRenda;
+  const r = estado.rendas.find((x) => x.id === id);
+  if (!r) return;
+  if (b.dataset.receber) {
+    estado.lancamentos.push({ id: uid(), data: dataNoMes(mesAtual, r.dia), descricao: r.nome, valor: r.valor, tipo: 'renda', rendaId: r.id });
+  } else if (b.dataset.desfazerRenda) {
+    const p = vinculado('rendaId', id, mesAtual);
+    estado.lancamentos = estado.lancamentos.filter((l) => l !== p);
+  } else if (b.dataset.delRenda) {
+    if (!confirm(`Excluir a renda "${r.nome}"? (As entradas já lançadas continuam.)`)) return;
+    estado.rendas = estado.rendas.filter((x) => x !== r);
+    estado.lancamentos.forEach((l) => { if (l.rendaId === id) delete l.rendaId; });
+  }
+  salvar(); render();
+});
+
+/* ================= Empréstimos ================= */
+
+$('#form-emp').data.value = hojeISO();
+$('#form-emp').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const valor = parseValor(f.valor.value);
+  if (!valor) return toast('Valor inválido');
+  const pessoa = f.pessoa.value.trim();
+  estado.lancamentos.push({
+    id: uid(), data: f.data.value, valor, tipo: f.tipo.value, pessoa,
+    descricao: f.descricao.value.trim() || (f.tipo.value === 'emp-saiu' ? `Para ${pessoa}` : `De ${pessoa}`),
+  });
+  salvar(); f.valor.value = ''; f.descricao.value = ''; render(); toast('Registrado');
+});
+
 /* ================= Importação + revisão ================= */
 
-$('#prompt-ia').textContent = PROMPT_IA;
+function renderOrigemImportacao() {
+  const cartao = importacao.origem === 'cartao';
+  $('#origem-cartao').hidden = !cartao || !estado.cartoes.length;
+  $('#sem-cartao').hidden = !cartao || estado.cartoes.length > 0;
+  $('#imp-cartao').innerHTML = estado.cartoes.map((c) => `<option value="${c.id}">${esc(c.nome)}</option>`).join('');
+  if (!cartaoPorId(importacao.cartaoId)) importacao.cartaoId = estado.cartoes[0]?.id || '';
+  $('#imp-cartao').value = importacao.cartaoId;
+  $('#imp-mes').value = importacao.mes || mesAtual;
+  $('#nome-doc').textContent = cartao ? 'a fatura do cartão (PDF ou print)' : 'seu extrato bancário';
+  $('#prompt-ia').textContent = cartao ? PROMPT_CARTAO : PROMPT_CONTA;
+}
+document.querySelectorAll('input[name=origem]').forEach((r) => r.addEventListener('change', () => {
+  importacao.origem = r.value; renderOrigemImportacao();
+}));
+$('#imp-cartao').onchange = (e) => { importacao.cartaoId = e.target.value; };
+$('#imp-mes').onchange = (e) => { importacao.mes = e.target.value; };
+
 $('#copiar-prompt').onclick = async () => {
-  try { await navigator.clipboard.writeText(PROMPT_IA); toast('Pedido copiado!'); }
+  try { await navigator.clipboard.writeText($('#prompt-ia').textContent); toast('Pedido copiado!'); }
   catch { toast('Não foi possível copiar — selecione o texto manualmente'); }
 };
 
@@ -312,32 +619,47 @@ $('#arquivo').addEventListener('change', async (e) => {
   try { iniciarRevisao(texto); } catch (err) { erroImportacao(err.message); }
 });
 
+/** preenche vínculos sugeridos (conta fixa, renda fixa, cartão) conforme o tipo da linha */
+function sugerirVinculos(r) {
+  r.fixaId = r.tipo === 'fixa' ? (sugerir(estado.fixas, r.descricao)?.id || '') : '';
+  r.rendaId = r.tipo === 'renda' ? (sugerir(estado.rendas, r.descricao)?.id || '') : '';
+  r.faturaCartaoId = r.tipo === 'fatura'
+    ? (sugerir(estado.cartoes, r.descricao)?.id || (estado.cartoes.length === 1 ? estado.cartoes[0].id : '')) : '';
+}
+
 function iniciarRevisao(texto) {
+  if (importacao.origem === 'cartao') {
+    importacao.cartaoId = $('#imp-cartao').value; importacao.mes = $('#imp-mes').value;
+    if (!cartaoPorId(importacao.cartaoId)) throw new Error('Cadastre e selecione um cartão antes de importar a fatura.');
+    if (!importacao.mes) throw new Error('Informe o mês de vencimento da fatura.');
+  }
   const linhas = parseCSV(texto);
   if (linhas.length < 2) throw new Error('O arquivo está vazio ou só tem o cabeçalho.');
   const cab = linhas[0].map(norm);
   const col = (...nomes) => cab.findIndex((c) => nomes.some((n) => c.startsWith(n)));
   const ix = {
     data: col('data'), desc: col('descri', 'historico', 'estabelecimento'), valor: col('valor'),
-    cat: col('categ'), tipo: col('tipo'), ess: col('essencial'),
+    cat: col('categ'), tipo: col('tipo'), ess: col('essencial'), pessoa: col('pessoa', 'nome'), parcela: col('parcela'),
   };
   if (ix.data < 0 || ix.desc < 0 || ix.valor < 0) {
     throw new Error('Não encontrei as colunas "data", "descricao" e "valor". Use o modelo de planilha.');
   }
   const existentes = new Set(estado.lancamentos.map((l) => `${l.data}|${l.valor}|${norm(l.descricao)}`));
+  const doCartao = importacao.origem === 'cartao';
 
   revisao = linhas.slice(1).map((c) => {
     const get = (i) => (i >= 0 ? (c[i] || '').trim() : '');
     const descricao = get(ix.desc);
     const mem = estado.memoria[norm(descricao)] || {};
-    const tipo = ix.tipo >= 0 && get(ix.tipo) ? parseTipo(get(ix.tipo)) : (mem.tipo || 'flexivel');
+    let tipo = parseTipo(get(ix.tipo)) || mem.tipo || 'flexivel';
+    if (doCartao && !TIPOS_CARTAO.includes(tipo)) tipo = 'flexivel';
     const ess = parseEssencial(get(ix.ess));
     const r = {
-      id: uid(), data: parseData(get(ix.data)), descricao, valor: parseValor(get(ix.valor)),
-      categoria: get(ix.cat) || mem.categoria || '', tipo,
-      essencial: ess !== null ? ess : (mem.essencial ?? null), fixaId: '', avisos: [],
+      data: parseData(get(ix.data)), descricao, valor: parseValor(get(ix.valor)), tipo,
+      categoria: get(ix.cat) || mem.categoria || '', pessoa: get(ix.pessoa) || mem.pessoa || '',
+      parcela: get(ix.parcela), essencial: ess !== null ? ess : (mem.essencial ?? null), avisos: [],
     };
-    if (tipo === 'fixa') r.fixaId = sugerirFixa(descricao)?.id || '';
+    sugerirVinculos(r);
     if (!r.data) r.avisos.push('data inválida');
     if (!r.valor) r.avisos.push('valor inválido');
     const dup = existentes.has(`${r.data}|${r.valor}|${norm(descricao)}`);
@@ -347,43 +669,62 @@ function iniciarRevisao(texto) {
   });
 
   erroImportacao('');
+  $('#rev-titulo').textContent = doCartao
+    ? `Revisão — fatura ${cartaoPorId(importacao.cartaoId).nome} (${nomeMes(importacao.mes).toLowerCase()})`
+    : 'Revisão — extrato da conta';
   $('#imp-inicio').hidden = true; $('#imp-revisao').hidden = false;
   renderRevisao();
 }
 
+function selectVinculo(campo, lista, valor, vazio) {
+  if (!lista.length) return '';
+  return `<select data-f="${campo}" class="vinculo">
+    <option value="">${vazio}</option>
+    ${lista.map((x) => `<option value="${x.id}" ${valor === x.id ? 'selected' : ''}>↳ ${esc(x.nome)}</option>`).join('')}
+  </select>`;
+}
+
 function renderRevisao() {
-  const optCats = categorias().map((c) => `<option value="${esc(c)}">`).join('');
-  $('#lista-categorias').innerHTML = optCats;
-  $('#tb-revisao').innerHTML = revisao.map((r, i) => `
-    <tr data-i="${i}" class="${r.incluir ? '' : 'off'}">
+  $('#lista-categorias').innerHTML = categorias().map((c) => `<option value="${esc(c)}">`).join('');
+  const tipos = importacao.origem === 'cartao' ? TIPOS_CARTAO : Object.keys(TIPOS);
+  $('#tb-revisao').innerHTML = revisao.map((r, i) => {
+    const gasto = ehGasto(r), emp = ehEmp(r);
+    let vinc = '';
+    if (r.tipo === 'fixa') vinc = selectVinculo('fixaId', estado.fixas, r.fixaId, '— não vincular a conta fixa —');
+    if (r.tipo === 'renda') vinc = selectVinculo('rendaId', estado.rendas, r.rendaId, '— não vincular a renda fixa —');
+    if (r.tipo === 'fatura') vinc = selectVinculo('faturaCartaoId', estado.cartoes, r.faturaCartaoId, '— qual cartão? —');
+    return `
+    <tr data-i="${i}" class="${r.incluir ? '' : 'off'} ${emp ? 'linha-emp' : ''}">
       <td><input type="checkbox" data-f="incluir" ${r.incluir ? 'checked' : ''}></td>
       <td><input type="date" data-f="data" value="${r.data}"></td>
       <td class="desc"><input data-f="descricao" value="${esc(r.descricao)}">
+        ${r.parcela ? `<span class="legenda">parcela ${esc(r.parcela)}</span>` : ''}
         ${r.avisos.length ? `<span class="aviso">⚠ ${r.avisos.join(' · ')}</span>` : ''}</td>
       <td class="num"><input data-f="valor" value="${r.valor ? r.valor.toFixed(2).replace('.', ',') : ''}" inputmode="decimal" style="width:90px;text-align:right"></td>
-      <td class="cat"><input data-f="categoria" list="lista-categorias" value="${esc(r.categoria)}" placeholder="Escolha…"></td>
-      <td>
-        <select data-f="tipo"><option value="flexivel" ${r.tipo !== 'fixa' ? 'selected' : ''}>Flexível</option>
-          <option value="fixa" ${r.tipo === 'fixa' ? 'selected' : ''}>Fixa</option></select>
-        ${r.tipo === 'fixa' && estado.fixas.length ? `<select data-f="fixaId" title="Vincular a uma conta fixa cadastrada" style="margin-top:4px">
-          <option value="">— não vincular —</option>
-          ${estado.fixas.map((f) => `<option value="${f.id}" ${r.fixaId === f.id ? 'selected' : ''}>↳ ${esc(f.nome)}</option>`).join('')}
-        </select>` : ''}
+      <td class="tipo">
+        <select data-f="tipo">${tipos.map((t) => `<option value="${t}" ${r.tipo === t ? 'selected' : ''}>${TIPOS[t]}</option>`).join('')}</select>
+        ${vinc}
       </td>
-      <td><div class="toggle ${r.essencial === null ? 'vazio-sel' : ''}">
+      <td class="cat">${gasto ? `<input data-f="categoria" list="lista-categorias" value="${esc(r.categoria)}" placeholder="Categoria…">`
+        : emp ? `<input data-f="pessoa" list="lista-pessoas" value="${esc(r.pessoa)}" placeholder="Nome da pessoa…" class="${r.pessoa ? '' : 'falta'}">`
+        : '<span class="legenda">—</span>'}</td>
+      <td>${gasto ? `<div class="toggle ${r.essencial === null ? 'vazio-sel' : ''}">
         <button type="button" data-ess="1" class="sim ${r.essencial === true ? 'on' : ''}">Sim</button>
         <button type="button" data-ess="0" class="nao ${r.essencial === false ? 'on' : ''}">Não</button>
-      </div></td>
-    </tr>`).join('');
+      </div>` : '<span class="legenda">—</span>'}</td>
+    </tr>`;
+  }).join('');
   atualizarResumoRevisao();
 }
 
 function atualizarResumoRevisao() {
   const inc = revisao.filter((r) => r.incluir);
-  const total = inc.reduce((t, r) => t + (r.valor || 0), 0);
-  const pend = inc.filter((r) => r.essencial === null).length;
-  $('#rev-resumo').innerHTML = `${inc.length} de ${revisao.length} linhas selecionadas · total ${brl(total)}`
-    + (pend ? ` · <b class="erro">${pend} sem marcar essencial/não</b>` : '');
+  const v = (f) => inc.filter(f).reduce((t, r) => t + (r.valor || 0), 0);
+  const pend = inc.filter((r) => ehGasto(r) && r.essencial === null).length;
+  const partes = [`${inc.length} de ${revisao.length} linhas selecionadas`, `gastos ${brl(v(ehGasto))}`];
+  if (v((r) => r.tipo === 'renda')) partes.push(`renda ${brl(v((r) => r.tipo === 'renda'))}`);
+  if (v(ehEmp)) partes.push(`empréstimos ${brl(v(ehEmp))}`);
+  $('#rev-resumo').innerHTML = partes.join(' · ') + (pend ? ` · <b class="erro">${pend} sem marcar essencial/não</b>` : '');
 }
 
 $('#tb-revisao').addEventListener('input', (e) => {
@@ -391,11 +732,8 @@ $('#tb-revisao').addEventListener('input', (e) => {
   if (!f) return;
   if (f === 'incluir') { r.incluir = e.target.checked; tr.classList.toggle('off', !r.incluir); }
   else if (f === 'valor') r.valor = parseValor(e.target.value);
-  else if (f === 'tipo') {
-    r.tipo = e.target.value;
-    r.fixaId = r.tipo === 'fixa' ? (sugerirFixa(r.descricao)?.id || '') : '';
-    renderRevisao(); return;
-  } else r[f] = e.target.value;
+  else if (f === 'tipo') { r.tipo = e.target.value; sugerirVinculos(r); renderRevisao(); return; }
+  else { r[f] = e.target.value; if (f === 'pessoa') e.target.classList.toggle('falta', !r.pessoa.trim()); }
   atualizarResumoRevisao();
 });
 
@@ -410,37 +748,56 @@ $('#tb-revisao').addEventListener('click', (e) => {
   atualizarResumoRevisao();
 });
 
-$('#todos-ess').onclick = () => { revisao.forEach((r) => { r.essencial = true; }); renderRevisao(); };
-$('#todos-nao').onclick = () => { revisao.forEach((r) => { r.essencial = false; }); renderRevisao(); };
+function marcarTodos(v) { revisao.forEach((r) => { if (ehGasto(r)) r.essencial = v; }); renderRevisao(); }
+$('#todos-ess').onclick = () => marcarTodos(true);
+$('#todos-nao').onclick = () => marcarTodos(false);
 
 function fecharRevisao() { revisao = []; $('#imp-inicio').hidden = false; $('#imp-revisao').hidden = true; }
 $('#cancelar-imp').onclick = fecharRevisao;
 
+function problemaDaLinha(r) {
+  if (!r.data || !r.valor || !r.descricao.trim()) return 'Complete data, valor e descrição';
+  if (ehGasto(r) && !r.categoria.trim()) return 'Escolha a categoria dos gastos';
+  if (ehGasto(r) && r.essencial === null) return 'Marque se cada gasto foi essencial ou não';
+  if (ehEmp(r) && !r.pessoa.trim()) return 'Informe o nome da pessoa nos empréstimos';
+  return '';
+}
+
 $('#confirmar-imp').onclick = () => {
   const inc = revisao.filter((r) => r.incluir);
   if (!inc.length) return toast('Nenhuma linha selecionada');
-  const problema = inc.find((r) => !r.data || !r.valor || !r.descricao.trim() || !r.categoria.trim() || r.essencial === null);
-  if (problema) {
-    const tr = $(`#tb-revisao tr[data-i="${revisao.indexOf(problema)}"]`);
+  const ruim = inc.find(problemaDaLinha);
+  if (ruim) {
+    const tr = $(`#tb-revisao tr[data-i="${revisao.indexOf(ruim)}"]`);
     tr.scrollIntoView({ block: 'center' }); tr.style.outline = '2px solid var(--erro)';
     setTimeout(() => { tr.style.outline = ''; }, 2000);
-    return toast('Complete data, valor, descrição, categoria e essencial em todas as linhas selecionadas');
+    return toast(problemaDaLinha(ruim));
   }
+  const doCartao = importacao.origem === 'cartao';
   inc.forEach((r) => {
-    // se a conta fixa já foi paga neste mês, não vincula de novo
-    const fixaId = r.tipo === 'fixa' && r.fixaId && !pagamentoDaFixa(r.fixaId, r.data.slice(0, 7)) ? r.fixaId : undefined;
-    estado.lancamentos.push({
-      id: uid(), data: r.data, descricao: r.descricao.trim(), valor: r.valor, categoria: r.categoria.trim(),
-      tipo: r.tipo, essencial: r.essencial, ...(fixaId ? { fixaId } : {}),
-    });
-    estado.memoria[norm(r.descricao)] = { categoria: r.categoria.trim(), tipo: r.tipo, essencial: r.essencial };
+    const l = { id: uid(), data: r.data, descricao: r.descricao.trim(), valor: r.valor, tipo: r.tipo };
+    if (doCartao) { l.cartaoId = importacao.cartaoId; l.mes = importacao.mes; }
+    if (r.parcela) l.parcela = r.parcela;
+    const mes = mesDe(l);
+    if (ehGasto(l)) {
+      l.categoria = r.categoria.trim(); l.essencial = r.essencial;
+      if (l.tipo === 'fixa' && r.fixaId && !vinculado('fixaId', r.fixaId, mes)) l.fixaId = r.fixaId;
+    }
+    if (ehEmp(l)) l.pessoa = r.pessoa.trim();
+    if (l.tipo === 'renda' && r.rendaId && !vinculado('rendaId', r.rendaId, mes)) l.rendaId = r.rendaId;
+    if (l.tipo === 'fatura' && r.faturaCartaoId) l.cartaoId = r.faturaCartaoId;
+    estado.lancamentos.push(l);
+    estado.memoria[norm(r.descricao)] = {
+      tipo: l.tipo, ...(ehGasto(l) ? { categoria: l.categoria, essencial: l.essencial } : {}), ...(l.pessoa ? { pessoa: l.pessoa } : {}),
+    };
   });
   salvar();
-  // vai para o mês com mais lançamentos importados
-  const cont = {}; inc.forEach((r) => { const m = r.data.slice(0, 7); cont[m] = (cont[m] || 0) + 1; });
-  mesAtual = Object.entries(cont).sort((x, y) => y[1] - x[1])[0][0];
-  fecharRevisao(); render();
-  document.querySelector('nav button[data-aba="resumo"]').click();
+  if (doCartao) mesAtual = importacao.mes;
+  else { // vai para o mês com mais lançamentos importados
+    const cont = {}; inc.forEach((r) => { const m = r.data.slice(0, 7); cont[m] = (cont[m] || 0) + 1; });
+    mesAtual = Object.entries(cont).sort((x, y) => y[1] - x[1])[0][0];
+  }
+  fecharRevisao(); render(); irPara(doCartao ? 'cartao' : 'resumo');
   toast(`${inc.length} lançamentos importados`);
 };
 
@@ -461,8 +818,9 @@ $('#restaurar').addEventListener('change', async (e) => {
     const s = JSON.parse(await arq.text());
     if (!Array.isArray(s.lancamentos) || !Array.isArray(s.fixas)) throw new Error();
     if (!confirm('Substituir todos os dados atuais pelo backup?')) return;
-    estado = { ...estadoVazio(), ...s }; salvar(); render(); toast('Backup restaurado');
+    estado = { ...estadoVazio(), ...s }; salvar(); render(); ajustarFormLanc(); toast('Backup restaurado');
   } catch { toast('Arquivo de backup inválido'); }
 });
 
 render();
+ajustarFormLanc();

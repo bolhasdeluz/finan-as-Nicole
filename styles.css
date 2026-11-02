@@ -90,3 +90,23 @@ footer { color: var(--muted); font-size: .85rem; padding-bottom: 24px; text-alig
 @media (max-width: 640px) {
   .tabela:not(.revisao) th:nth-child(4), .tabela:not(.revisao) td:nth-child(4) { display: none; }
 }
+
+/* --- renda, cartão, empréstimos --- */
+[hidden] { display: none !important; }
+.pos { color: var(--ess); }
+.neg { color: var(--erro); }
+.card small + small, .card strong + small { display: block; margin-top: 2px; font-size: .78rem; }
+.cards.menor { margin-top: 12px; }
+.cards.menor strong { font-size: 1.1rem; }
+.bloco { background: var(--card); border: 1px solid var(--borda); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+.bloco-topo { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.bloco-topo small { margin-left: 8px; }
+.bloco .tabela { border: 1px solid var(--borda); }
+.bloco p { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.origem { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; background: var(--card); border: 1px solid var(--borda); border-radius: 12px; padding: 12px; }
+.origem label { display: flex; align-items: center; gap: 6px; }
+.origem .erro { flex-basis: 100%; margin: 0; }
+.revisao td.tipo { min-width: 170px; }
+.revisao .vinculo { margin-top: 4px; font-size: .82rem; }
+.revisao input.falta { border-color: var(--erro); }
+.revisao tr.linha-emp td { background: #f4f1fd; }

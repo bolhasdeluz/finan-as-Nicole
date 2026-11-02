@@ -19,7 +19,10 @@
   <nav>
     <button data-aba="resumo" class="ativa">Resumo</button>
     <button data-aba="lancamentos">Lançamentos</button>
+    <button data-aba="cartao">Cartão</button>
     <button data-aba="fixas">Contas fixas</button>
+    <button data-aba="renda">Renda</button>
+    <button data-aba="emprestimos">Empréstimos</button>
     <button data-aba="importar">Importar</button>
   </nav>
 
@@ -27,11 +30,17 @@
     <!-- RESUMO -->
     <section id="aba-resumo" class="aba">
       <div class="cards">
-        <div class="card"><small>Total gasto</small><strong id="r-total"></strong></div>
+        <div class="card"><small>Renda do mês</small><strong id="r-renda" class="pos"></strong><small id="r-renda-prev"></small></div>
+        <div class="card"><small>Gastos do mês</small><strong id="r-total"></strong></div>
+        <div class="card"><small>Sobra prevista</small><strong id="r-sobra"></strong><small>renda − gastos − fixas a pagar</small></div>
+      </div>
+      <div class="cards menor">
         <div class="card"><small>Contas fixas</small><strong id="r-fixas"></strong></div>
         <div class="card"><small>Flexíveis</small><strong id="r-flex"></strong></div>
+        <div class="card"><small>No cartão</small><strong id="r-cartao"></strong></div>
         <div class="card"><small>Fixas a pagar</small><strong id="r-apagar"></strong></div>
       </div>
+      <p class="legenda" id="r-emprestimos"></p>
 
       <h2>Essencial × Não essencial</h2>
       <div class="barra"><div id="r-barra-ess"></div></div>
@@ -41,7 +50,7 @@
         <span class="dot nao"></span> Não essencial <b id="r-nao"></b>
       </p>
 
-      <h2>Por categoria</h2>
+      <h2>Gastos por categoria</h2>
       <ul id="r-categorias" class="lista-cat"></ul>
     </section>
 
@@ -49,27 +58,48 @@
     <section id="aba-lancamentos" class="aba" hidden>
       <form id="form-lanc" class="form">
         <input type="date" name="data" required>
+        <select name="tipo">
+          <option value="flexivel">Gasto flexível</option>
+          <option value="fixa">Gasto fixo</option>
+          <option value="renda">Renda / entrada</option>
+          <option value="emp-saiu">Empréstimo — saiu</option>
+          <option value="emp-entrou">Empréstimo — entrou</option>
+        </select>
         <input name="descricao" placeholder="Descrição" required>
         <input name="valor" placeholder="Valor (ex.: 45,90)" inputmode="decimal" required>
-        <input name="categoria" placeholder="Categoria" list="lista-categorias" required>
-        <select name="tipo">
-          <option value="flexivel">Flexível</option>
-          <option value="fixa">Fixa</option>
-        </select>
-        <label class="check"><input type="checkbox" name="essencial"> Essencial</label>
+        <input name="categoria" placeholder="Categoria" list="lista-categorias" class="so-gasto">
+        <input name="pessoa" placeholder="Pessoa" list="lista-pessoas" class="so-emp" hidden>
+        <select name="forma" class="so-pagto"><option value="">Pago na conta</option></select>
+        <label class="check so-gasto"><input type="checkbox" name="essencial"> Essencial</label>
         <button type="submit">Adicionar</button>
       </form>
-      <table class="tabela">
-        <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Tipo</th><th>Essencial</th><th class="num">Valor</th><th></th></tr></thead>
-        <tbody id="tb-lanc"></tbody>
-      </table>
+      <div class="tabela-wrap">
+        <table class="tabela">
+          <thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th>Categoria</th><th>Essencial</th><th class="num">Valor</th><th></th></tr></thead>
+          <tbody id="tb-lanc"></tbody>
+        </table>
+      </div>
       <p id="lanc-vazio" class="vazio">Nenhum lançamento neste mês.</p>
+    </section>
+
+    <!-- CARTÃO -->
+    <section id="aba-cartao" class="aba" hidden>
+      <p class="dica">As compras do cartão contam como gasto no mês de <b>vencimento</b> da fatura.
+        O pagamento da fatura que aparece no extrato não é contado de novo.</p>
+      <form id="form-cartao" class="form">
+        <input name="nome" placeholder="Nome do cartão (ex.: Nubank)" required>
+        <input name="fechamento" type="number" min="1" max="31" placeholder="Dia fechamento" required>
+        <input name="vencimento" type="number" min="1" max="31" placeholder="Dia vencimento" required>
+        <button type="submit">Cadastrar cartão</button>
+      </form>
+      <div id="lista-cartoes"></div>
+      <p id="cartoes-vazio" class="vazio">Nenhum cartão cadastrado.</p>
     </section>
 
     <!-- CONTAS FIXAS -->
     <section id="aba-fixas" class="aba" hidden>
-      <p class="dica">Cadastre aqui as contas que se repetem todo mês. Marque como paga a cada mês
-        (ou vincule ao importar o extrato).</p>
+      <p class="dica">Cadastre as contas que se repetem todo mês. Marque como paga a cada mês
+        (ou vincule ao importar o extrato/fatura).</p>
       <form id="form-fixa" class="form">
         <input name="nome" placeholder="Nome (ex.: Aluguel)" required>
         <input name="valor" placeholder="Valor previsto" inputmode="decimal" required>
@@ -78,19 +108,81 @@
         <label class="check"><input type="checkbox" name="essencial" checked> Essencial</label>
         <button type="submit">Cadastrar</button>
       </form>
-      <table class="tabela">
-        <thead><tr><th>Conta</th><th>Venc.</th><th>Categoria</th><th class="num">Previsto</th><th class="num">Pago</th><th>Status</th><th></th></tr></thead>
-        <tbody id="tb-fixas"></tbody>
-      </table>
+      <div class="tabela-wrap">
+        <table class="tabela">
+          <thead><tr><th>Conta</th><th>Venc.</th><th>Categoria</th><th class="num">Previsto</th><th class="num">Pago</th><th>Status</th><th></th></tr></thead>
+          <tbody id="tb-fixas"></tbody>
+        </table>
+      </div>
       <p id="fixas-vazio" class="vazio">Nenhuma conta fixa cadastrada.</p>
+    </section>
+
+    <!-- RENDA -->
+    <section id="aba-renda" class="aba" hidden>
+      <p class="dica">Cadastre sua renda fixa (salário, pensão, aluguel recebido…) e marque quando receber.
+        Entradas avulsas vêm do extrato ou da aba Lançamentos.</p>
+      <form id="form-renda" class="form">
+        <input name="nome" placeholder="Nome (ex.: Salário)" required>
+        <input name="valor" placeholder="Valor previsto" inputmode="decimal" required>
+        <input name="dia" type="number" min="1" max="31" placeholder="Dia que cai">
+        <button type="submit">Cadastrar renda</button>
+      </form>
+      <div class="tabela-wrap">
+        <table class="tabela">
+          <thead><tr><th>Renda fixa</th><th>Dia</th><th class="num">Previsto</th><th class="num">Recebido</th><th>Status</th><th></th></tr></thead>
+          <tbody id="tb-rendas"></tbody>
+        </table>
+      </div>
+      <p id="rendas-vazio" class="vazio">Nenhuma renda fixa cadastrada.</p>
+      <h2>Entradas do mês</h2>
+      <div class="tabela-wrap">
+        <table class="tabela">
+          <thead><tr><th>Data</th><th>Descrição</th><th class="num">Valor</th></tr></thead>
+          <tbody id="tb-entradas"></tbody>
+        </table>
+      </div>
+      <p id="entradas-vazio" class="vazio">Nenhuma entrada neste mês.</p>
+    </section>
+
+    <!-- EMPRÉSTIMOS -->
+    <section id="aba-emprestimos" class="aba" hidden>
+      <p class="dica">Dinheiro que vai e volta: o que você emprestou, pegou emprestado ou pagou por alguém.
+        Não conta como gasto nem como renda.</p>
+      <div class="cards">
+        <div class="card"><small>Te devem</small><strong id="e-receber" class="pos"></strong></div>
+        <div class="card"><small>Você deve</small><strong id="e-pagar" class="neg"></strong></div>
+      </div>
+      <form id="form-emp" class="form" style="margin-top:16px">
+        <input type="date" name="data" required>
+        <input name="pessoa" placeholder="Pessoa" list="lista-pessoas" required>
+        <select name="tipo">
+          <option value="emp-saiu">Emprestei / devolvi (saiu)</option>
+          <option value="emp-entrou">Recebi de volta / peguei emprestado (entrou)</option>
+        </select>
+        <input name="valor" placeholder="Valor" inputmode="decimal" required>
+        <input name="descricao" placeholder="Observação (opcional)">
+        <button type="submit">Registrar</button>
+      </form>
+      <div id="lista-pessoas-emp"></div>
+      <p id="emp-vazio" class="vazio">Nenhum empréstimo registrado.</p>
     </section>
 
     <!-- IMPORTAR -->
     <section id="aba-importar" class="aba" hidden>
       <div id="imp-inicio">
+        <div class="origem">
+          <b>O que você vai importar?</b>
+          <label><input type="radio" name="origem" value="conta" checked> Extrato da conta</label>
+          <label><input type="radio" name="origem" value="cartao"> Fatura do cartão</label>
+          <span id="origem-cartao" hidden>
+            <select id="imp-cartao"></select>
+            fatura que vence em <input type="month" id="imp-mes">
+          </span>
+          <p id="sem-cartao" class="erro" hidden>Cadastre um cartão na aba Cartão primeiro.</p>
+        </div>
         <ol class="passos">
           <li><a href="modelo-importacao.csv" download>Baixe o modelo de planilha</a>.</li>
-          <li>No chat da IA, anexe seu extrato bancário + o modelo e cole este pedido:
+          <li>No chat da IA, anexe <span id="nome-doc">seu extrato bancário</span> + o modelo e cole este pedido:
             <div class="prompt-box">
               <pre id="prompt-ia"></pre>
               <button id="copiar-prompt" type="button">Copiar pedido</button>
@@ -104,16 +196,16 @@
       </div>
 
       <div id="imp-revisao" hidden>
-        <h2>Revisão da importação</h2>
-        <p class="dica">Confira cada linha: ajuste a categoria, o tipo e marque o que foi essencial.
-          Linhas desmarcadas não serão salvas.</p>
+        <h2 id="rev-titulo">Revisão da importação</h2>
+        <p class="dica">Confira cada linha: ajuste o tipo, a categoria e marque o que foi essencial.
+          Em empréstimos, confira o nome da pessoa. Linhas desmarcadas não serão salvas.</p>
         <div class="acoes-lote">
-          <button type="button" id="todos-ess">Marcar todos essenciais</button>
-          <button type="button" id="todos-nao">Marcar todos não essenciais</button>
+          <button type="button" id="todos-ess">Marcar gastos como essenciais</button>
+          <button type="button" id="todos-nao">Marcar gastos como não essenciais</button>
         </div>
         <div class="tabela-wrap">
           <table class="tabela revisao">
-            <thead><tr><th>Salvar</th><th>Data</th><th>Descrição</th><th class="num">Valor</th><th>Categoria</th><th>Tipo</th><th>Essencial?</th></tr></thead>
+            <thead><tr><th>Salvar</th><th>Data</th><th>Descrição</th><th class="num">Valor</th><th>Tipo</th><th>Categoria / Pessoa</th><th>Essencial?</th></tr></thead>
             <tbody id="tb-revisao"></tbody>
           </table>
         </div>
@@ -132,6 +224,7 @@
   </footer>
 
   <datalist id="lista-categorias"></datalist>
+  <datalist id="lista-pessoas"></datalist>
   <div id="toast" hidden></div>
   <script src="app.js"></script>
 </body>
