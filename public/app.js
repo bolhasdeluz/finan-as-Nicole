@@ -642,7 +642,7 @@ $('#arquivo').addEventListener('change', async (e) => {
   const arq = e.target.files[0]; e.target.value = '';
   if (!arq) return;
   let texto = await arq.text();
-  if (texto.includes('�')) texto = new TextDecoder('windows-1252').decode(await arq.arrayBuffer());
+  if (texto.includes('\uFFFD')) texto = new TextDecoder('windows-1252').decode(await arq.arrayBuffer());
   try { iniciarRevisao(texto); } catch (err) { erroImportacao(err.message); }
 });
 
