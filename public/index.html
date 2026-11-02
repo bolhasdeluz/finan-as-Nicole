@@ -8,7 +8,7 @@
 </head>
 <body>
   <header>
-    <h1>Finanças</h1>
+    <h1>Finanças <span id="status-nuvem" class="status-nuvem" title="Backup na nuvem"></span></h1>
     <div class="mes">
       <button id="mes-ant" aria-label="Mês anterior">‹</button>
       <span id="mes-label"></span>
@@ -24,6 +24,8 @@
     <button data-aba="renda">Renda</button>
     <button data-aba="emprestimos">Empréstimos</button>
     <button data-aba="importar">Importar</button>
+    <button data-aba="nuvem">☁ Nuvem</button>
+    <button data-aba="ajuda">Como usar</button>
   </nav>
 
   <main>
@@ -215,6 +217,85 @@
           <button type="button" id="confirmar-imp">Salvar lançamentos</button>
         </div>
       </div>
+    </section>
+
+    <!-- NUVEM -->
+    <section id="aba-nuvem" class="aba" hidden>
+      <div id="nuvem-off">
+        <div class="bloco">
+          <p><b>Guarde seus dados na nuvem para não perder nada</b> e para usar no celular e no computador.</p>
+          <ul class="dica">
+            <li>Tudo é <b>criptografado no seu aparelho</b> com a sua senha antes de sair dele.
+              O servidor só guarda um bloco embaralhado: <b>ninguém</b>, nem quem mantém o app, consegue ler.</li>
+            <li>Por isso, <b>se você esquecer a senha, não existe recuperação</b> do backup da nuvem.
+              Anote em um lugar seguro.</li>
+            <li>Depois de entrar, cada alteração é enviada sozinha.</li>
+          </ul>
+        </div>
+        <p id="nuvem-indisponivel" class="erro" hidden>A nuvem só funciona quando o app é aberto pelo link
+          (https), não pelo arquivo no computador.</p>
+        <div class="origem" style="margin-bottom:12px">
+          <label><input type="radio" name="modo-nuvem" value="entrar" checked> Já tenho conta</label>
+          <label><input type="radio" name="modo-nuvem" value="criar"> Criar conta</label>
+        </div>
+        <form id="form-nuvem" class="form">
+          <input name="usuario" placeholder="Nome de usuário" autocomplete="username" required>
+          <input name="senha" type="password" placeholder="Senha (mín. 10 caracteres)" autocomplete="current-password" minlength="10" required>
+          <input name="senha2" type="password" placeholder="Repita a senha" autocomplete="new-password" class="so-criar" hidden>
+          <button type="submit" id="btn-nuvem">Entrar</button>
+        </form>
+        <p id="nuvem-msg" class="legenda"></p>
+      </div>
+      <div id="nuvem-on" hidden>
+        <div class="bloco">
+          <p>☁ Conectada como <b id="nuvem-usuario"></b></p>
+          <p class="legenda" id="nuvem-estado"></p>
+          <p><button type="button" id="nuvem-sync">Sincronizar agora</button>
+            <button type="button" id="nuvem-sair" class="sec">Sair deste aparelho</button></p>
+          <p class="dica">Para usar em outro aparelho: abra o mesmo link, vá em ☁ Nuvem → “Já tenho conta”
+            e entre com o mesmo usuário e senha.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMO USAR -->
+    <section id="aba-ajuda" class="aba tutorial" hidden>
+      <h2>Como usar, em 5 passos</h2>
+      <ol>
+        <li><b>Cadastre o básico (uma vez só).</b>
+          <ul>
+            <li><b>Renda</b>: seu salário e outras rendas que caem todo mês.</li>
+            <li><b>Contas fixas</b>: aluguel, luz, internet, escola… com o valor e o dia.</li>
+            <li><b>Cartão</b>: cada cartão com o dia de fechamento e de vencimento.</li>
+          </ul>
+        </li>
+        <li><b>Importe o extrato do banco (1× por mês ou quando quiser).</b>
+          <ul>
+            <li>Na aba <b>Importar</b>, deixe marcado <i>Extrato da conta</i>.</li>
+            <li>Baixe o <b>modelo de planilha</b> e clique em <b>Copiar pedido</b>.</li>
+            <li>Abra o ChatGPT/Claude/Gemini, anexe o extrato do banco (PDF ou print) + o modelo,
+              cole o pedido e envie.</li>
+            <li>Baixe o arquivo que a IA devolver e selecione no app.</li>
+          </ul>
+        </li>
+        <li><b>Revise.</b> Confira cada linha: corrija a categoria, marque <b>Sim</b> (essencial) ou
+          <b>Não</b> (supérfluo), confira o nome da pessoa nos empréstimos e clique em <b>Salvar lançamentos</b>.
+          Linhas em vermelho estão faltando informação.</li>
+        <li><b>Importe a fatura do cartão</b> do mesmo jeito: em <b>Importar</b>, escolha
+          <i>Fatura do cartão</i>, o cartão e o mês de vencimento, copie o pedido (é diferente do extrato)
+          e repita.</li>
+        <li><b>Acompanhe no Resumo.</b> Lá aparece quanto entrou, quanto saiu, quanto deve sobrar,
+          o que foi essencial e em que categoria o dinheiro foi.</li>
+      </ol>
+      <h2>Dicas</h2>
+      <ul>
+        <li>Gastou algo agora? Lance na hora em <b>Lançamentos</b>, sem esperar o extrato.</li>
+        <li>Emprestou dinheiro ou alguém te devolveu? Isso fica em <b>Empréstimos</b> e não conta como gasto.
+          A IA tenta identificar sozinha; confira na revisão.</li>
+        <li>Pagou uma conta fixa? Marque como paga em <b>Contas fixas</b> (ou ela é marcada sozinha na importação).</li>
+        <li>Use as setas ‹ › lá em cima para trocar de mês.</li>
+        <li>Ative a <b>☁ Nuvem</b> para não perder seus dados se trocar de celular ou limpar o navegador.</li>
+      </ul>
     </section>
   </main>
 

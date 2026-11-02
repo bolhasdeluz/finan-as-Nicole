@@ -110,3 +110,9 @@ footer { color: var(--muted); font-size: .85rem; padding-bottom: 24px; text-alig
 .revisao .vinculo { margin-top: 4px; font-size: .82rem; }
 .revisao input.falta { border-color: var(--erro); }
 .revisao tr.linha-emp td { background: #f4f1fd; }
+
+/* --- nuvem e tutorial --- */
+.status-nuvem { font-size: .8rem; font-weight: 500; color: var(--muted); margin-left: 6px; }
+.tutorial ol > li { margin-bottom: 14px; }
+.tutorial li { line-height: 1.5; }
+.bloco ul { padding-left: 20px; }

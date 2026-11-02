@@ -1,8 +1,45 @@
 # Finanças da Nicole
 
-App super simples de controle de gastos mensais. Roda direto no navegador, sem instalar nada:
-basta abrir o `index.html`. Os dados ficam salvos no próprio navegador (use **Fazer backup** no
-rodapé de vez em quando).
+App super simples de controle de gastos mensais. Roda no navegador (celular ou computador).
+Os dados ficam no próprio aparelho e, se a pessoa ativar a **☁ Nuvem**, também num backup
+**criptografado de ponta a ponta** no Cloudflare.
+
+- Tutorial para quem usa: [`TUTORIAL.md`](TUTORIAL.md) (o mesmo texto está na aba **Como usar** do app).
+- Para testar sem publicar: abra `public/index.html` no navegador (a nuvem só funciona pelo link https).
+
+## Estrutura
+
+```
+public/            o app (HTML + JS + CSS, sem build)
+worker/index.js    Worker do Cloudflare: serve o app e guarda os cofres criptografados
+wrangler.toml      configuração do Worker
+```
+
+## Publicar no Cloudflare (gera o link)
+
+Precisa de uma conta Cloudflare (o plano grátis basta) e Node.js instalado.
+
+```bash
+npx wrangler login                      # abre o navegador para autorizar
+npx wrangler kv namespace create COFRES # copie o "id" que aparecer
+# cole esse id em wrangler.toml, no lugar de COLOQUE_AQUI_O_ID_DO_KV
+npx wrangler deploy                     # mostra o link: https://financas-nicole.<sua-conta>.workers.dev
+```
+
+Para atualizar depois de mudanças no código, rode `npx wrangler deploy` de novo.
+Testar localmente: `npx wrangler dev` e abrir http://localhost:8787.
+
+## Privacidade: como funciona a criptografia
+
+- A senha **nunca sai do aparelho**. Dela o navegador deriva (PBKDF2-SHA256, 600 mil iterações)
+  uma chave AES-GCM de 256 bits, que criptografa todos os dados antes do envio, e um token de
+  acesso separado.
+- O servidor guarda só: um hash do nome de usuário, um hash do token e o bloco criptografado.
+  Quem administra a conta Cloudflare **não consegue ler** os dados.
+- Consequência: **se a senha for esquecida, o backup da nuvem não pode ser recuperado** (os dados
+  no aparelho continuam). Por isso a senha mínima é de 10 caracteres; uma frase é o ideal.
+- Vários aparelhos: cada alteração é enviada sozinha; ao abrir o app ele baixa a versão mais nova.
+  Se dois aparelhos alterarem ao mesmo tempo, fica a versão que chegou primeiro na nuvem.
 
 ## O que tem
 

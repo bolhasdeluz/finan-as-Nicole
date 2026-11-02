@@ -81,7 +81,7 @@ function carregar() {
 }
 
 let estado = carregar();
-function salvar() { localStorage.setItem(CHAVE, JSON.stringify(estado)); }
+function salvar() { localStorage.setItem(CHAVE, JSON.stringify(estado)); agendarEnvio(); }
 
 const anoMes = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 const hojeISO = () => `${anoMes(new Date())}-${String(new Date().getDate()).padStart(2, '0')}`;
@@ -822,5 +822,177 @@ $('#restaurar').addEventListener('change', async (e) => {
   } catch { toast('Arquivo de backup inválido'); }
 });
 
+/* ================= Nuvem (backup criptografado de ponta a ponta) ================= */
+/*
+ * A senha nunca sai do aparelho. Dela derivamos (PBKDF2-SHA256, 600 mil iterações) 64 bytes:
+ *   - 32 bytes = chave AES-GCM que criptografa os dados aqui no navegador;
+ *   - 32 bytes = token de acesso enviado ao servidor (que guarda só o hash dele).
+ * O id do cofre é um hash do nome de usuário. O servidor só vê dados ilegíveis.
+ */
+
+const CHAVE_NUVEM = 'financas-nicole-nuvem';
+const API_NUVEM = location.protocol.startsWith('http') ? '/api/cofre/' : null;
+let nuvem = null; // { usuario, id, token, chave (base64), versao, pendente, sincronizadoEm }
+try { nuvem = JSON.parse(localStorage.getItem(CHAVE_NUVEM)); } catch (e) { nuvem = null; }
+const salvarNuvem = () => (nuvem ? localStorage.setItem(CHAVE_NUVEM, JSON.stringify(nuvem)) : localStorage.removeItem(CHAVE_NUVEM));
+
+const paraHex = (b) => [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+const paraB64 = (b) => btoa(String.fromCharCode(...b));
+const deB64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+let chaveCache = null;
+
+async function derivarCredenciais(usuario, senha) {
+  const enc = new TextEncoder();
+  const u = norm(usuario);
+  const base = await crypto.subtle.importKey('raw', enc.encode(senha), 'PBKDF2', false, ['deriveBits']);
+  const bits = new Uint8Array(await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: enc.encode('financas-nicole:v1:' + u), iterations: 600000 }, base, 512));
+  const id = paraHex(new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode('financas-nicole:id:' + u))));
+  return { usuario: u, id, chave: paraB64(bits.slice(0, 32)), token: paraHex(bits.slice(32)) };
+}
+
+async function chaveAES() {
+  if (!chaveCache) chaveCache = await crypto.subtle.importKey('raw', deB64(nuvem.chave), 'AES-GCM', false, ['encrypt', 'decrypt']);
+  return chaveCache;
+}
+
+async function cifrar(obj) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await chaveAES(), new TextEncoder().encode(JSON.stringify(obj)));
+  return { iv: paraB64(iv), ct: paraB64(new Uint8Array(ct)) };
+}
+
+async function decifrar(dados) {
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: deB64(dados.iv) }, await chaveAES(), deB64(dados.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+
+async function api(metodo, cred, corpo) {
+  const r = await fetch(API_NUVEM + cred.id, {
+    method: metodo,
+    headers: { authorization: 'Bearer ' + cred.token, ...(corpo ? { 'content-type': 'application/json' } : {}) },
+    body: corpo ? JSON.stringify(corpo) : undefined,
+  });
+  return { status: r.status, corpo: await r.json().catch(() => ({})) };
+}
+
+let timerEnvio = null, enviando = false;
+function agendarEnvio() {
+  if (!nuvem) return;
+  nuvem.pendente = true; salvarNuvem(); renderNuvem();
+  clearTimeout(timerEnvio); timerEnvio = setTimeout(enviarNuvem, 1500);
+}
+
+async function enviarNuvem() {
+  if (!nuvem || !nuvem.pendente || enviando) return;
+  enviando = true;
+  try {
+    const { status, corpo } = await api('PUT', nuvem, { versao: nuvem.versao, dados: await cifrar(estado) });
+    if (status === 200) {
+      nuvem.versao = corpo.versao; nuvem.pendente = false; nuvem.sincronizadoEm = corpo.atualizadoEm;
+    } else if (status === 409) {
+      // outro aparelho salvou antes: fica a versão da nuvem
+      await baixarNuvem(true);
+      toast('Seus dados foram atualizados por outro aparelho. Confira a última alteração.');
+    } else if (status === 401) {
+      toast('A senha da nuvem não confere mais. Entre de novo na aba ☁ Nuvem.');
+      nuvem = null;
+    }
+  } catch (e) { /* sem internet: tenta de novo depois */ }
+  enviando = false; salvarNuvem(); renderNuvem();
+}
+
+/** busca a versão da nuvem; se for mais nova que a deste aparelho, substitui os dados locais */
+async function baixarNuvem(forcar = false) {
+  const { status, corpo } = await api('GET', nuvem);
+  if (status === 401) { toast('Senha da nuvem incorreta. Entre de novo na aba ☁ Nuvem.'); nuvem = null; return; }
+  if (status !== 200) throw new Error('falha ' + status);
+  if (forcar || corpo.versao > nuvem.versao) {
+    estado = { ...estadoVazio(), ...(await decifrar(corpo.dados)) };
+    localStorage.setItem(CHAVE, JSON.stringify(estado));
+    nuvem.versao = corpo.versao; nuvem.pendente = false; nuvem.sincronizadoEm = corpo.atualizadoEm;
+    render();
+  }
+}
+
+async function sincronizar() {
+  if (!nuvem || !API_NUVEM) return;
+  try {
+    await baixarNuvem(false);
+    if (nuvem && nuvem.pendente) await enviarNuvem();
+  } catch (e) { /* offline */ }
+  salvarNuvem(); renderNuvem();
+}
+
+function renderNuvem() {
+  const on = !!nuvem;
+  $('#nuvem-off').hidden = on; $('#nuvem-on').hidden = !on;
+  $('#nuvem-indisponivel').hidden = !!API_NUVEM;
+  $('#status-nuvem').textContent = !on ? '' : nuvem.pendente ? '☁ …' : '☁ ✓';
+  $('#status-nuvem').title = !on ? '' : nuvem.pendente ? 'Alterações ainda não enviadas para a nuvem' : 'Tudo salvo na nuvem';
+  if (!on) return;
+  $('#nuvem-usuario').textContent = nuvem.usuario;
+  $('#nuvem-estado').textContent = nuvem.pendente
+    ? 'Há alterações ainda não enviadas (sem internet?). Elas vão sozinhas quando a conexão voltar.'
+    : `Tudo salvo na nuvem${nuvem.sincronizadoEm ? ' em ' + new Date(nuvem.sincronizadoEm).toLocaleString('pt-BR') : ''}.`;
+}
+
+const modoNuvem = () => document.querySelector('input[name=modo-nuvem]:checked').value;
+document.querySelectorAll('input[name=modo-nuvem]').forEach((r) => r.addEventListener('change', () => {
+  const criar = modoNuvem() === 'criar';
+  document.querySelectorAll('.so-criar').forEach((el) => { el.hidden = !criar; el.required = criar; });
+  $('#btn-nuvem').textContent = criar ? 'Criar conta e enviar meus dados' : 'Entrar';
+  $('#nuvem-msg').textContent = '';
+}));
+
+$('#form-nuvem').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target; const msg = $('#nuvem-msg'); const criar = modoNuvem() === 'criar';
+  if (!API_NUVEM) { msg.textContent = 'Abra o app pelo link para usar a nuvem.'; return; }
+  if (criar && f.senha.value !== f.senha2.value) { msg.textContent = 'As senhas não são iguais.'; return; }
+  $('#btn-nuvem').disabled = true; msg.textContent = 'Gerando a chave de criptografia…';
+  try {
+    const cred = await derivarCredenciais(f.usuario.value, f.senha.value);
+    chaveCache = null;
+    const { status, corpo } = await api('GET', cred);
+    if (criar) {
+      if (status !== 404) { msg.textContent = 'Esse nome de usuário já existe. Escolha outro ou use “Já tenho conta”.'; return; }
+      nuvem = { ...cred, versao: 0, pendente: true };
+      await enviarNuvem();
+      if (nuvem && !nuvem.pendente) toast('Conta criada! Seus dados estão protegidos na nuvem.');
+    } else {
+      if (status === 404 || status === 401) { msg.textContent = 'Usuário ou senha incorretos.'; return; }
+      if (status !== 200) { msg.textContent = 'Não foi possível conectar. Tente de novo.'; return; }
+      nuvem = { ...cred, versao: 0, pendente: false };
+      let dados;
+      try { dados = await decifrar(corpo.dados); } catch { nuvem = null; msg.textContent = 'Usuário ou senha incorretos.'; return; }
+      const temLocal = estado.lancamentos.length || estado.fixas.length || estado.rendas.length || estado.cartoes.length;
+      if (temLocal && !confirm('Substituir os dados deste aparelho pelos dados da nuvem?')) { nuvem = null; msg.textContent = ''; return; }
+      estado = { ...estadoVazio(), ...dados };
+      localStorage.setItem(CHAVE, JSON.stringify(estado));
+      nuvem.versao = corpo.versao; nuvem.sincronizadoEm = corpo.atualizadoEm;
+      render(); ajustarFormLanc(); toast('Dados carregados da nuvem');
+    }
+    f.reset(); msg.textContent = '';
+  } catch (err) {
+    msg.textContent = 'Não foi possível conectar. Verifique a internet.';
+  } finally {
+    $('#btn-nuvem').disabled = false; salvarNuvem(); renderNuvem();
+  }
+});
+
+$('#nuvem-sync').onclick = async () => { await sincronizar(); toast(nuvem && !nuvem.pendente ? 'Sincronizado' : 'Não foi possível sincronizar agora'); };
+$('#nuvem-sair').onclick = () => {
+  if (nuvem.pendente && !confirm('Há alterações ainda não enviadas. Sair mesmo assim?')) return;
+  if (!confirm('Sair da nuvem neste aparelho? Os dados continuam aqui e na nuvem.')) return;
+  nuvem = null; chaveCache = null; salvarNuvem(); renderNuvem();
+};
+window.addEventListener('online', sincronizar);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) sincronizar(); });
+
 render();
 ajustarFormLanc();
+renderNuvem();
+sincronizar();
+// primeira vez abrindo o app: mostra o tutorial
+if (!nuvem && !estado.lancamentos.length && !estado.fixas.length && !estado.rendas.length && !estado.cartoes.length) irPara('ajuda');

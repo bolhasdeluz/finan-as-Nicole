@@ -1,0 +1,13 @@
+name = "financas-nicole"
+main = "worker/index.js"
+compatibility_date = "2025-09-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# Crie o namespace com:  npx wrangler kv namespace create COFRES
+# e cole o id que aparecer abaixo.
+[[kv_namespaces]]
+binding = "COFRES"
+id = "COLOQUE_AQUI_O_ID_DO_KV"
