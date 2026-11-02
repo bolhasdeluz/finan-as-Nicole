@@ -6,8 +6,7 @@ compatibility_date = "2025-09-01"
 directory = "./public"
 binding = "ASSETS"
 
-# Crie o namespace com:  npx wrangler kv namespace create COFRES
-# e cole o id que aparecer abaixo.
+# Banco KV exclusivo deste app (financas-nicole-cofres)
 [[kv_namespaces]]
 binding = "COFRES"
-id = "COLOQUE_AQUI_O_ID_DO_KV"
+id = "0c8e019803044c9eb66657032d9cec7e"
