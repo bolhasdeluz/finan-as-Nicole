@@ -52,7 +52,7 @@ nav button { background: none; color: var(--muted); border: 0; border-bottom: 2p
 nav button.ativa { color: var(--pri); border-bottom-color: var(--pri); }
 main { padding-top: 16px; padding-bottom: 32px; }
 
-button { background: var(--pri); color: var(--sobre-pri); border: 0; border-radius: 8px; padding: 8px 14px; font: inherit; cursor: pointer; }
+button { -webkit-tap-highlight-color: transparent; background: var(--pri); color: var(--sobre-pri); border: 0; border-radius: 8px; padding: 8px 14px; font: inherit; cursor: pointer; }
 button.sec { background: var(--sutil); color: var(--txt); }
 button.mini { padding: 2px 8px; font-size: .85rem; }
 button.del { background: none; color: var(--muted); padding: 2px 6px; }
@@ -113,9 +113,6 @@ input, select { font: inherit; padding: 7px 9px; border: 1px solid var(--borda);
 footer { color: var(--muted); font-size: .85rem; padding-bottom: 24px; text-align: center; }
 #toast { position: fixed; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); background: var(--txt); color: var(--bg); max-width: calc(100% - 32px); padding: 10px 16px; border-radius: 8px; }
 
-@media (max-width: 640px) {
-  .tabela:not(.revisao) th:nth-child(4), .tabela:not(.revisao) td:nth-child(4) { display: none; }
-}
 
 /* --- renda, cartão, empréstimos --- */
 [hidden] { display: none !important; }
@@ -155,3 +152,127 @@ button.link { font: inherit; }
   background: var(--emp-bg); border: 1px dashed var(--pri); border-radius: 12px; padding: 10px 14px; margin: 0 0 16px; }
 .passos li.sem-numero { list-style: none; margin-left: -1.2em; color: var(--muted); }
 p.aviso-exemplo { display: block; }
+
+/* --- navegação, formulários recolhíveis, revisão --- */
+.ico { display: none; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#btn-mais, #menu-mais { display: none; }
+.form-dobra > summary { display: none; }
+.revisao td.val input { width: 96px; text-align: right; }
+.so-mobile { display: none; }
+
+@media (max-width: 640px) {
+  header { padding-top: 12px; }
+  h1 { font-size: 1.2rem; }
+  .mes { gap: 6px; font-size: .95rem; }
+  .mes span { min-width: 0; }
+  .so-desk { display: none !important; }
+  .so-mobile { display: initial; }
+  h2 { margin-top: 18px; }
+
+  /* menu fixo embaixo, como aplicativo */
+  nav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; margin: 0; max-width: none;
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 0;
+    background: var(--card); border-top: 1px solid var(--borda); border-bottom: 0;
+    padding: 4px max(4px, env(safe-area-inset-right, 0px)) calc(4px + env(safe-area-inset-bottom, 0px)) max(4px, env(safe-area-inset-left, 0px));
+  }
+  nav .sec-aba { display: none; }
+  nav button, #btn-mais {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 6px 2px; border: 0; font-size: .7rem; color: var(--muted); background: none; border-radius: 8px;
+  }
+  nav button.ativa { color: var(--pri); border-bottom: 0; }
+  nav button span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .ico { display: block; }
+  #menu-mais:not([hidden]) {
+    display: grid; position: fixed; z-index: 16; right: max(8px, env(safe-area-inset-right, 0px));
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px)); min-width: 200px;
+    background: var(--card); border: 1px solid var(--borda); border-radius: 12px; padding: 6px;
+    box-shadow: 0 8px 24px var(--sombra);
+  }
+  #menu-mais button { background: none; color: var(--txt); text-align: left; padding: 12px 14px; border-radius: 8px; }
+  #menu-mais button.ativa { color: var(--pri); background: var(--sutil); }
+  main { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); padding-top: 12px; }
+  footer { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+  #toast { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+
+  /* resumo: sobra em destaque, depois renda e gastos lado a lado */
+  .cards { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .card { padding: 12px; }
+  .card strong { font-size: 1.15rem; }
+  #aba-resumo .cards:not(.menor) .card:nth-child(3) { order: -1; grid-column: 1 / -1; }
+  #aba-resumo .cards:not(.menor) .card:nth-child(3) strong { font-size: 1.6rem; }
+  .cards.menor strong { font-size: 1rem; }
+
+  /* formulários recolhidos atrás de um botão */
+  .form-dobra { margin-bottom: 12px; }
+  .form-dobra > summary {
+    display: block; list-style: none; cursor: pointer; text-align: center; font-weight: 600;
+    color: var(--pri); background: var(--card); border: 1px dashed var(--pri); border-radius: 12px; padding: 12px;
+  }
+  .form-dobra > summary::-webkit-details-marker { display: none; }
+  .form-dobra[open] > summary { border-style: solid; border-radius: 12px 12px 0 0; border-bottom: 0; }
+  .form-dobra[open] > .form { border-radius: 0 0 12px 12px; border-color: var(--pri); margin-bottom: 0; }
+  .form input, .form select { flex: 1 1 140px; }
+  .form button[type=submit] { flex: 1 1 100%; padding: 12px; }
+
+  /* tabelas viram lista de cartões */
+  .tabela-wrap { overflow-x: visible; }
+  .tabela.cards, .tabela.cards tbody { display: block; }
+  .tabela.cards thead { display: none; }
+  .tabela.cards tr { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 10px 12px; border-bottom: 1px solid var(--borda); }
+  .tabela.cards td { border: 0; padding: 0; font-size: .82rem; color: var(--muted); }
+  .tabela.cards td.p { order: -2; flex: 1 1 calc(100% - 120px); min-width: 0; font-size: .95rem; font-weight: 600; color: var(--txt); }
+  .tabela.cards td.v { order: -1; font-size: .95rem; font-weight: 600; color: var(--txt); }
+  .tabela.cards td.v.pos, .tabela.cards td.v .pos { color: var(--ess); }
+  .tabela.cards td:last-child { margin-left: auto; }
+  .tabela.cards .tag { font-size: .72rem; }
+  .bloco { padding: 10px 12px; }
+  .bloco .tabela.cards { border: 0; }
+  .bloco .tabela.cards tr { padding: 8px 0; }
+
+  /* revisão: um cartão por linha do extrato */
+  #imp-revisao .dica { font-size: .85rem; }
+  .revisao, .revisao tbody { display: block; }
+  .revisao thead { display: none; }
+  .revisao tr {
+    display: grid; grid-template-columns: 26px 1fr 112px; gap: 6px 8px; padding: 12px;
+    grid-template-areas: "sel desc desc" ". data val" ". tipo tipo" ". cat ess";
+    border-bottom: 1px solid var(--borda);
+  }
+  .revisao td { border: 0; padding: 0; }
+  .revisao td.sel { grid-area: sel; align-self: center; }
+  .revisao td.sel input { width: 20px; height: 20px; }
+  .revisao td.desc { grid-area: desc; min-width: 0; }
+  .revisao td.desc input { font-weight: 600; }
+  .revisao td.data { grid-area: data; min-width: 0; }
+  .revisao td.val { grid-area: val; }
+  .revisao td.val input { width: 100%; font-weight: 600; }
+  .revisao td.tipo { grid-area: tipo; min-width: 0; display: flex; gap: 6px; }
+  .revisao td.tipo select { flex: 1 1 0; min-width: 0; margin-top: 0 !important; }
+  .revisao td.cat { grid-area: cat; min-width: 0; }
+  .revisao td.ess { grid-area: ess; }
+  .revisao td.ess .toggle { display: flex; width: 100%; }
+  .revisao td.ess .toggle button { flex: 1; padding: 7px 0; }
+  .revisao .traco { display: none; }
+  .revisao tr.off { opacity: .55; }
+  .revisao tr.off td:not(:first-child) { opacity: 1; }
+  .acoes-lote button { flex: 1 1 140px; }
+  .revisao tr.linha-emp { background: var(--emp-bg); }
+  .revisao tr.linha-emp td { background: none; }
+  .revisao td.ess:has(.traco) { display: none; }
+  .tabela.cards button.mini.sec { background: none; padding: 0; }
+  .tabela.cards button.del { padding: 2px 4px; }
+
+  /* barra fixa com o total e o botão de salvar */
+  .rodape-rev {
+    position: sticky; bottom: calc(62px + env(safe-area-inset-bottom, 0px)); z-index: 5;
+    background: var(--card); border: 1px solid var(--borda); border-radius: 12px; padding: 10px 12px; margin-top: 12px;
+    box-shadow: 0 -4px 16px var(--sombra);
+  }
+  .rodape-rev .legenda { margin: 0 0 8px; font-size: .8rem; }
+  .rodape-rev .acoes { margin: 0; }
+  .rodape-rev .acoes button { flex: 1; padding: 11px; }
+  .prompt-box pre { max-height: 140px; }
+  .origem { gap: 8px 12px; }
+}

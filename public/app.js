@@ -288,7 +288,7 @@ function renderResumo() {
 }
 
 function tagEssencial(l) {
-  if (!ehGasto(l)) return '—';
+  if (!ehGasto(l)) return '<span class="so-desk">—</span>';
   return `<button class="mini sec" data-toggle-ess="${l.id}" title="Clique para alternar">
     <span class="tag ${l.essencial ? 'ess' : 'nao'}">${l.essencial ? 'Essencial' : 'Não essencial'}</span></button>`;
 }
@@ -312,12 +312,12 @@ function renderLancamentos() {
   $('#tb-lanc').innerHTML = ls.map((l) => `
     <tr>
       <td>${dataBR(l.data)}</td>
-      <td>${esc(l.descricao)}${l.parcela ? ` <small class="legenda">(${esc(l.parcela)})</small>` : ''}</td>
-      <td><small>${rotuloTipo(l)}</small></td>
-      <td>${ehGasto(l) ? esc(l.categoria) : '—'}</td>
+      <td class="p">${esc(l.descricao)}${l.parcela ? ` <small class="legenda">(${esc(l.parcela)})</small>` : ''}</td>
+      <td class="${ehGasto(l) ? 'so-desk' : ''}"><small>${rotuloTipo(l)}</small></td>
+      <td class="${ehGasto(l) ? '' : 'so-desk'}">${ehGasto(l) ? esc(l.categoria) : '—'}</td>
       <td>${tagEssencial(l)}</td>
-      <td class="num">${valorComSinal(l)}</td>
-      <td><button class="del" data-del-lanc="${l.id}" title="Excluir">✕</button></td>
+      <td class="num v">${valorComSinal(l)}</td>
+      <td><button class="del" data-del-lanc="${l.id}" title="Excluir" aria-label="Excluir">✕</button></td>
     </tr>`).join('');
 }
 
@@ -338,14 +338,14 @@ function renderCartoes() {
         ${pago ? `<span class="tag pago">Paga ${brl(pago.valor)}</span> <button class="mini sec" data-desfazer-fatura="${c.id}">desfazer</button>`
                : `<span class="tag pendente">Em aberto</span> ${total ? `<button class="mini" data-pagar-fatura="${c.id}">marcar paga</button>` : ''}`}
         <button class="mini sec" data-importar-fatura="${c.id}">Importar fatura</button></p>
-      ${compras.length ? `<div class="tabela-wrap"><table class="tabela">
+      ${compras.length ? `<div class="tabela-wrap"><table class="tabela cards">
         <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Essencial</th><th class="num">Valor</th><th></th></tr></thead>
         <tbody>${compras.map((l) => `<tr>
           <td>${dataBR(l.data)}</td>
-          <td>${esc(l.descricao)}${l.parcela ? ` <small class="legenda">(${esc(l.parcela)})</small>` : ''}</td>
+          <td class="p">${esc(l.descricao)}${l.parcela ? ` <small class="legenda">(${esc(l.parcela)})</small>` : ''}</td>
           <td>${ehGasto(l) ? esc(l.categoria) : `<small>${rotuloTipo(l)}</small>`}</td>
           <td>${tagEssencial(l)}</td>
-          <td class="num">${brl(l.valor)}</td>
+          <td class="num v">${brl(l.valor)}</td>
           <td><button class="del" data-del-lanc="${l.id}" title="Excluir">✕</button></td></tr>`).join('')}</tbody>
       </table></div>` : '<p class="vazio">Nenhuma compra nesta fatura.</p>'}
     </div>`;
@@ -358,11 +358,11 @@ function renderFixas() {
   $('#tb-fixas').innerHTML = fx.map((f) => {
     const p = vinculado('fixaId', f.id, mesAtual);
     return `<tr>
-      <td>${esc(f.nome)}</td>
+      <td class="p">${esc(f.nome)}</td>
       <td>${f.dia ? 'dia ' + f.dia : '—'}</td>
       <td>${esc(f.categoria)}</td>
-      <td class="num">${brl(f.valor)}</td>
-      <td class="num">${p ? brl(p.valor) : '—'}</td>
+      <td class="num v">${brl(f.valor)}</td>
+      <td class="num so-desk">${p ? brl(p.valor) : '—'}</td>
       <td>${p
         ? `<span class="tag pago">Paga</span> <button class="mini sec" data-desfazer="${f.id}">desfazer</button>`
         : `<span class="tag pendente">Pendente</span> <button class="mini" data-pagar="${f.id}">marcar paga</button>`}</td>
@@ -376,10 +376,10 @@ function renderRendas() {
   $('#tb-rendas').innerHTML = [...estado.rendas].sort((x, y) => (x.dia || 99) - (y.dia || 99)).map((r) => {
     const p = vinculado('rendaId', r.id, mesAtual);
     return `<tr>
-      <td>${esc(r.nome)}</td>
+      <td class="p">${esc(r.nome)}</td>
       <td>${r.dia ? 'dia ' + r.dia : '—'}</td>
-      <td class="num">${brl(r.valor)}</td>
-      <td class="num">${p ? brl(p.valor) : '—'}</td>
+      <td class="num v">${brl(r.valor)}</td>
+      <td class="num so-desk">${p ? brl(p.valor) : '—'}</td>
       <td>${p
         ? `<span class="tag pago">Recebida</span> <button class="mini sec" data-desfazer-renda="${r.id}">desfazer</button>`
         : `<span class="tag pendente">A receber</span> <button class="mini" data-receber="${r.id}">marcar recebida</button>`}</td>
@@ -388,8 +388,8 @@ function renderRendas() {
   }).join('');
   const ent = doMes(mesAtual).filter((l) => l.tipo === 'renda').sort((x, y) => x.data.localeCompare(y.data));
   $('#entradas-vazio').hidden = ent.length > 0;
-  $('#tb-entradas').innerHTML = ent.map((l) => `<tr><td>${dataBR(l.data)}</td><td>${esc(l.descricao)}</td>
-    <td class="num pos">${brl(l.valor)}</td></tr>`).join('');
+  $('#tb-entradas').innerHTML = ent.map((l) => `<tr><td>${dataBR(l.data)}</td><td class="p">${esc(l.descricao)}</td>
+    <td class="num v pos">${brl(l.valor)}</td></tr>`).join('');
 }
 
 function renderEmprestimos() {
@@ -405,11 +405,11 @@ function renderEmprestimos() {
       : s > 0 ? `<span class="tag ess">te deve ${brl(s)}</span>` : `<span class="tag nao">você deve ${brl(-s)}</span>`;
     return `<div class="bloco">
       <div class="bloco-topo"><b>${esc(p)}</b> ${status}</div>
-      <table class="tabela"><tbody>${movs.map((l) => `<tr>
+      <table class="tabela cards"><tbody>${movs.map((l) => `<tr>
         <td>${dataBR(l.data)}</td>
         <td>${l.tipo === 'emp-saiu' ? '↗ saiu' : '↙ entrou'}${l.cartaoId ? ' (cartão)' : ''}</td>
-        <td>${esc(l.descricao)}</td>
-        <td class="num ${l.tipo === 'emp-entrou' ? 'pos' : ''}">${brl(l.valor)}</td>
+        <td class="p">${esc(l.descricao)}</td>
+        <td class="num v ${l.tipo === 'emp-entrou' ? 'pos' : ''}">${brl(l.valor)}</td>
         <td><button class="del" data-del-lanc="${l.id}" title="Excluir">✕</button></td></tr>`).join('')}
       </tbody></table></div>`;
   }).join('');
@@ -417,11 +417,34 @@ function renderEmprestimos() {
 
 /* ================= Navegação ================= */
 
-function irPara(aba) {
-  document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('ativa', x.dataset.aba === aba));
-  document.querySelectorAll('.aba').forEach((s) => { s.hidden = s.id !== 'aba-' + aba; });
+const ABAS_MAIS = ['fixas', 'renda', 'emprestimos', 'nuvem', 'ajuda'];
+function abrirMais(abrir) {
+  $('#menu-mais').hidden = !abrir;
+  $('#btn-mais').setAttribute('aria-expanded', String(abrir));
 }
-document.querySelectorAll('nav button').forEach((b) => b.addEventListener('click', () => irPara(b.dataset.aba)));
+function irPara(aba) {
+  document.querySelectorAll('nav [data-aba], #menu-mais [data-aba]').forEach((x) => x.classList.toggle('ativa', x.dataset.aba === aba));
+  $('#btn-mais').classList.toggle('ativa', ABAS_MAIS.includes(aba));
+  document.querySelectorAll('.aba').forEach((s) => { s.hidden = s.id !== 'aba-' + aba; });
+  abrirMais(false);
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('nav [data-aba], #menu-mais [data-aba]').forEach((b) => b.addEventListener('click', () => irPara(b.dataset.aba)));
+$('#btn-mais').onclick = () => abrirMais($('#menu-mais').hidden);
+document.addEventListener('click', (e) => {
+  if (!$('#menu-mais').hidden && !e.target.closest('#menu-mais, #btn-mais')) abrirMais(false);
+});
+
+/* formulários recolhidos no celular, sempre abertos no computador */
+const celular = matchMedia('(max-width: 640px)');
+document.querySelectorAll('form.form[data-titulo]').forEach((f) => {
+  const d = document.createElement('details'); d.className = 'form-dobra';
+  const s = document.createElement('summary'); s.textContent = f.dataset.titulo;
+  f.before(d); d.append(s, f); d.open = !celular.matches;
+});
+celular.addEventListener('change', () => {
+  document.querySelectorAll('.form-dobra').forEach((d) => { d.open = !celular.matches; });
+});
 
 function mudarMes(delta) {
   const [a, m] = mesAtual.split('-').map(Number);
@@ -773,23 +796,23 @@ function renderRevisao() {
     if (r.tipo === 'fatura') vinc = selectVinculo('faturaCartaoId', estado.cartoes, r.faturaCartaoId, '— qual cartão? —');
     return `
     <tr data-i="${i}" class="${r.incluir ? '' : 'off'} ${emp ? 'linha-emp' : ''}">
-      <td><input type="checkbox" data-f="incluir" ${r.incluir ? 'checked' : ''}></td>
-      <td><input type="date" data-f="data" value="${r.data}"></td>
-      <td class="desc"><input data-f="descricao" value="${esc(r.descricao)}">
+      <td class="sel"><input type="checkbox" data-f="incluir" ${r.incluir ? 'checked' : ''} aria-label="Salvar esta linha"></td>
+      <td class="data"><input type="date" data-f="data" value="${r.data}" aria-label="Data"></td>
+      <td class="desc"><input data-f="descricao" value="${esc(r.descricao)}" aria-label="Descrição">
         ${r.parcela ? `<span class="legenda">parcela ${esc(r.parcela)}</span>` : ''}
         ${r.avisos.length ? `<span class="aviso">⚠ ${r.avisos.join(' · ')}</span>` : ''}</td>
-      <td class="num"><input data-f="valor" value="${r.valor ? r.valor.toFixed(2).replace('.', ',') : ''}" inputmode="decimal" style="width:90px;text-align:right"></td>
+      <td class="num val"><input data-f="valor" value="${r.valor ? r.valor.toFixed(2).replace('.', ',') : ''}" inputmode="decimal" aria-label="Valor"></td>
       <td class="tipo">
         <select data-f="tipo">${tipos.map((t) => `<option value="${t}" ${r.tipo === t ? 'selected' : ''}>${TIPOS[t]}</option>`).join('')}</select>
         ${vinc}
       </td>
       <td class="cat">${gasto ? `<input data-f="categoria" list="lista-categorias" value="${esc(r.categoria)}" placeholder="Categoria…">`
         : emp ? `<input data-f="pessoa" list="lista-pessoas" value="${esc(r.pessoa)}" placeholder="Nome da pessoa…" class="${r.pessoa ? '' : 'falta'}">`
-        : '<span class="legenda">—</span>'}</td>
-      <td>${gasto ? `<div class="toggle ${r.essencial === null ? 'vazio-sel' : ''}">
+        : '<span class="legenda traco">—</span>'}</td>
+      <td class="ess">${gasto ? `<div class="toggle ${r.essencial === null ? 'vazio-sel' : ''}">
         <button type="button" data-ess="1" class="sim ${r.essencial === true ? 'on' : ''}">Sim</button>
         <button type="button" data-ess="0" class="nao ${r.essencial === false ? 'on' : ''}">Não</button>
-      </div>` : '<span class="legenda">—</span>'}</td>
+      </div>` : '<span class="legenda traco">—</span>'}</td>
     </tr>`;
   }).join('');
   atualizarResumoRevisao();
