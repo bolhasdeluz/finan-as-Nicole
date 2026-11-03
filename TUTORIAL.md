@@ -2,7 +2,7 @@
 
 ## Primeira vez (5 minutos)
 
-1. Abra o link do app no celular ou no computador. No celular, use "Adicionar à tela inicial"
+1. Abra o app no celular ou no computador: https://financas-nicole.bolhasdeluz.workers.dev No celular, use "Adicionar à tela inicial"
    para ele ficar como um aplicativo.
 2. Vá em **☁ Nuvem** → **Criar conta**. Escolha um nome de usuário e uma senha (uma frase fácil
    de lembrar, com pelo menos 10 letras). **Anote a senha**: ela protege seus dados e ninguém
