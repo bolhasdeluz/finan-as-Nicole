@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Finanças da Nicole</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>Finanças <span id="status-nuvem" class="status-nuvem" title="Backup na nuvem"></span></h1>
+    <div class="mes">
+      <button id="mes-ant" aria-label="Mês anterior">‹</button>
+      <span id="mes-label"></span>
+      <button id="mes-prox" aria-label="Próximo mês">›</button>
+    </div>
+  </header>
+
+  <nav>
+    <button data-aba="resumo" class="ativa"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11M10 20V5M16 20v-6M21 20H3"/></svg><span>Resumo</span></button>
+    <button data-aba="lancamentos"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg><span>Lançamentos</span></button>
+    <button data-aba="relatorio"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg><span>Relatório</span></button>
+    <button data-aba="cartao" class="sec-aba"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19M6 15h4"/></svg><span>Cartão</span></button>
+    <button data-aba="fixas" class="sec-aba">Contas fixas</button>
+    <button data-aba="renda" class="sec-aba">Renda</button>
+    <button data-aba="emprestimos" class="sec-aba">Empréstimos</button>
+    <button data-aba="importar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg><span>Importar</span></button>
+    <button data-aba="nuvem" class="sec-aba">☁ Nuvem</button>
+    <button data-aba="ajuda" class="sec-aba">Ajuda</button>
+    <button type="button" id="btn-mais" aria-expanded="false" aria-controls="menu-mais"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg><span>Mais</span></button>
+  </nav>
+  <div id="menu-mais" hidden>
+    <button type="button" data-aba="cartao">Cartão</button>
+    <button type="button" data-aba="fixas">Contas fixas</button>
+    <button type="button" data-aba="renda">Renda</button>
+    <button type="button" data-aba="emprestimos">Empréstimos</button>
+    <button type="button" data-aba="nuvem">☁ Nuvem</button>
+    <button type="button" data-aba="ajuda">Como usar</button>
+  </div>
+
+  <main>
+    <!-- RESUMO -->
+    <section id="aba-resumo" class="aba">
+      <div id="banner-exemplo" class="aviso-exemplo" hidden>
+        <span>Você está vendo <b>dados de exemplo</b>.</span>
+        <button type="button" id="apagar-exemplos" class="mini sec">Apagar exemplos</button>
+      </div>
+      <div class="cards">
+        <div class="card"><small>Renda do mês</small><strong id="r-renda" class="pos"></strong><small id="r-renda-prev"></small></div>
+        <div class="card"><small>Gastos do mês</small><strong id="r-total"></strong></div>
+        <div class="card"><small>Sobra prevista</small><strong id="r-sobra"></strong><small>renda − gastos − fixas a pagar</small></div>
+      </div>
+      <div class="cards menor">
+        <div class="card"><small>Contas fixas</small><strong id="r-fixas"></strong></div>
+        <div class="card"><small>Flexíveis</small><strong id="r-flex"></strong></div>
+        <div class="card"><small>No cartão</small><strong id="r-cartao"></strong></div>
+        <div class="card"><small>Fixas a pagar</small><strong id="r-apagar"></strong></div>
+      </div>
+      <p class="legenda" id="r-emprestimos"></p>
+
+      <h2>Essencial × Não essencial</h2>
+      <div class="barra"><div id="r-barra-ess"></div></div>
+      <p class="legenda">
+        <span class="dot ess"></span> Essencial <b id="r-ess"></b>
+        &nbsp;·&nbsp;
+        <span class="dot nao"></span> Não essencial <b id="r-nao"></b>
+      </p>
+
+      <h2>Gastos por categoria</h2>
+      <ul id="r-categorias" class="lista-cat"></ul>
+    </section>
+
+    <!-- RELATÓRIO -->
+    <section id="aba-relatorio" class="aba" hidden>
+      <div class="rel-filtros">
+        <label for="rel-periodo">Período</label>
+        <select id="rel-periodo">
+          <option value="1">Só este mês</option>
+          <option value="3" selected>Últimos 3 meses</option>
+          <option value="6">Últimos 6 meses</option>
+          <option value="12">Últimos 12 meses</option>
+        </select>
+        <span class="rel-acoes">
+          <button type="button" id="rel-copiar" class="sec">Copiar relatório</button>
+          <button type="button" id="rel-imprimir" class="sec" hidden>Imprimir / PDF</button>
+        </span>
+      </div>
+      <p id="rel-frase" class="rel-frase"></p>
+      <div class="cards" id="rel-cards"></div>
+
+      <h2>Para onde foi o dinheiro</h2>
+      <p class="legenda">Gastos por categoria no período. Toque numa categoria para ver os maiores gastos dela.</p>
+      <div id="rel-categorias" class="rel-cats"></div>
+
+      <div id="rel-mensal-bloco">
+        <h2>Mês a mês</h2>
+        <div class="rel-legenda">
+          <span><i class="chave ess"></i>Essencial</span>
+          <span><i class="chave nao"></i>Não essencial</span>
+          <span><i class="chave linha"></i>Renda</span>
+        </div>
+        <div id="rel-mensal" class="rel-grafico"></div>
+        <details class="rel-tabela">
+          <summary>Ver em tabela</summary>
+          <div class="tabela-wrap"><table class="tabela" id="rel-tabela"></table></div>
+        </details>
+      </div>
+
+      <h2>Como o dinheiro foi gasto</h2>
+      <div id="rel-divisoes" class="rel-divisoes"></div>
+
+      <div class="rel-duas">
+        <div>
+          <h2>Onde você mais gasta</h2>
+          <ol id="rel-lugares" class="rel-ranking"></ol>
+        </div>
+        <div>
+          <h2>Maiores gastos</h2>
+          <ol id="rel-maiores" class="rel-ranking"></ol>
+        </div>
+      </div>
+      <div id="rel-dica" class="rel-tooltip" hidden></div>
+    </section>
+
+    <!-- LANÇAMENTOS -->
+    <section id="aba-lancamentos" class="aba" hidden>
+      <form id="form-lanc" class="form" data-titulo="+ Adicionar lançamento">
+        <input type="date" name="data" required>
+        <select name="tipo">
+          <option value="flexivel">Gasto flexível</option>
+          <option value="fixa">Gasto fixo</option>
+          <option value="renda">Renda / entrada</option>
+          <option value="emp-saiu">Empréstimo — saiu</option>
+          <option value="emp-entrou">Empréstimo — entrou</option>
+        </select>
+        <input name="descricao" placeholder="Descrição" required>
+        <input name="valor" placeholder="Valor (ex.: 45,90)" inputmode="decimal" required>
+        <input name="categoria" placeholder="Categoria" list="lista-categorias" class="so-gasto">
+        <input name="pessoa" placeholder="Pessoa" list="lista-pessoas" class="so-emp" hidden>
+        <select name="forma" class="so-pagto"><option value="">Pago na conta</option></select>
+        <label class="check so-gasto"><input type="checkbox" name="essencial"> Essencial</label>
+        <button type="submit">Adicionar</button>
+      </form>
+      <div class="tabela-wrap">
+        <table class="tabela cards">
+          <thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th>Categoria</th><th>Essencial</th><th class="num">Valor</th><th></th></tr></thead>
+          <tbody id="tb-lanc"></tbody>
+        </table>
+      </div>
+      <p id="lanc-vazio" class="vazio">Nenhum lançamento neste mês.</p>
+    </section>
+
+    <!-- CARTÃO -->
+    <section id="aba-cartao" class="aba" hidden>
+      <p class="dica">As compras do cartão contam como gasto no mês de <b>vencimento</b> da fatura.
+        O pagamento da fatura que aparece no extrato não é contado de novo.</p>
+      <form id="form-cartao" class="form" data-titulo="+ Cadastrar cartão">
+        <input name="nome" placeholder="Nome do cartão (ex.: Nubank)" required>
+        <input name="fechamento" type="number" min="1" max="31" placeholder="Dia fechamento" required>
+        <input name="vencimento" type="number" min="1" max="31" placeholder="Dia vencimento" required>
+        <button type="submit">Cadastrar cartão</button>
+      </form>
+      <div id="lista-cartoes"></div>
+      <p id="cartoes-vazio" class="vazio">Nenhum cartão cadastrado.</p>
+    </section>
+
+    <!-- CONTAS FIXAS -->
+    <section id="aba-fixas" class="aba" hidden>
+      <p class="dica">Cadastre as contas que se repetem todo mês. Marque como paga a cada mês
+        (ou vincule ao importar o extrato/fatura).</p>
+      <form id="form-fixa" class="form" data-titulo="+ Cadastrar conta fixa">
+        <input name="nome" placeholder="Nome (ex.: Aluguel)" required>
+        <input name="valor" placeholder="Valor previsto" inputmode="decimal" required>
+        <input name="dia" type="number" min="1" max="31" placeholder="Dia venc.">
+        <input name="categoria" placeholder="Categoria" list="lista-categorias" required>
+        <label class="check"><input type="checkbox" name="essencial" checked> Essencial</label>
+        <button type="submit">Cadastrar</button>
+      </form>
+      <div class="tabela-wrap">
+        <table class="tabela cards">
+          <thead><tr><th>Conta</th><th>Venc.</th><th>Categoria</th><th class="num">Previsto</th><th class="num">Pago</th><th>Status</th><th></th></tr></thead>
+          <tbody id="tb-fixas"></tbody>
+        </table>
+      </div>
+      <p id="fixas-vazio" class="vazio">Nenhuma conta fixa cadastrada.</p>
+    </section>
+
+    <!-- RENDA -->
+    <section id="aba-renda" class="aba" hidden>
+      <p class="dica">Cadastre sua renda fixa (salário, pensão, aluguel recebido…) e marque quando receber.
+        Entradas avulsas vêm do extrato ou da aba Lançamentos.</p>
+      <form id="form-renda" class="form" data-titulo="+ Cadastrar renda">
+        <input name="nome" placeholder="Nome (ex.: Salário)" required>
+        <input name="valor" placeholder="Valor previsto" inputmode="decimal" required>
+        <input name="dia" type="number" min="1" max="31" placeholder="Dia que cai">
+        <button type="submit">Cadastrar renda</button>
+      </form>
+      <div class="tabela-wrap">
+        <table class="tabela cards">
+          <thead><tr><th>Renda fixa</th><th>Dia</th><th class="num">Previsto</th><th class="num">Recebido</th><th>Status</th><th></th></tr></thead>
+          <tbody id="tb-rendas"></tbody>
+        </table>
+      </div>
+      <p id="rendas-vazio" class="vazio">Nenhuma renda fixa cadastrada.</p>
+      <h2>Entradas do mês</h2>
+      <div class="tabela-wrap">
+        <table class="tabela cards">
+          <thead><tr><th>Data</th><th>Descrição</th><th class="num">Valor</th></tr></thead>
+          <tbody id="tb-entradas"></tbody>
+        </table>
+      </div>
+      <p id="entradas-vazio" class="vazio">Nenhuma entrada neste mês.</p>
+    </section>
+
+    <!-- EMPRÉSTIMOS -->
+    <section id="aba-emprestimos" class="aba" hidden>
+      <p class="dica">Dinheiro que vai e volta: o que você emprestou, pegou emprestado ou pagou por alguém.
+        Não conta como gasto nem como renda.</p>
+      <div class="cards">
+        <div class="card"><small>Te devem</small><strong id="e-receber" class="pos"></strong></div>
+        <div class="card"><small>Você deve</small><strong id="e-pagar" class="neg"></strong></div>
+      </div>
+      <form id="form-emp" class="form" data-titulo="+ Registrar empréstimo" style="margin-top:16px">
+        <input type="date" name="data" required>
+        <input name="pessoa" placeholder="Pessoa" list="lista-pessoas" required>
+        <select name="tipo">
+          <option value="emp-saiu">Emprestei / devolvi (saiu)</option>
+          <option value="emp-entrou">Recebi de volta / peguei emprestado (entrou)</option>
+        </select>
+        <input name="valor" placeholder="Valor" inputmode="decimal" required>
+        <input name="descricao" placeholder="Observação (opcional)">
+        <button type="submit">Registrar</button>
+      </form>
+      <div id="lista-pessoas-emp"></div>
+      <p id="emp-vazio" class="vazio">Nenhum empréstimo registrado.</p>
+    </section>
+
+    <!-- IMPORTAR -->
+    <section id="aba-importar" class="aba" hidden>
+      <div id="imp-inicio">
+        <div class="origem">
+          <b>O que você vai importar?</b>
+          <label><input type="radio" name="origem" value="conta" checked> Extrato da conta</label>
+          <label><input type="radio" name="origem" value="cartao"> Fatura do cartão</label>
+          <span id="origem-cartao" hidden>
+            <select id="imp-cartao"></select>
+            fatura que vence em <input type="month" id="imp-mes">
+          </span>
+          <p id="sem-cartao" class="erro" hidden>Cadastre um cartão na aba Cartão primeiro.</p>
+        </div>
+        <ol class="passos">
+          <li><a href="modelo-importacao.csv" download>Baixe o modelo de planilha</a>
+            (ou <button type="button" id="copiar-modelo" class="link">copie o modelo</button> e cole no chat).</li>
+          <li>No chat da IA, anexe <span id="nome-doc">seu extrato bancário</span> + o modelo e cole este pedido:
+            <div class="prompt-box">
+              <pre id="prompt-ia"></pre>
+              <button id="copiar-prompt" type="button">Copiar pedido</button>
+            </div>
+          </li>
+          <li>Baixe o CSV que a IA devolver e selecione aqui:
+            <input type="file" id="arquivo" accept=".csv,text/csv,text/plain">
+          </li>
+          <li class="sem-numero">Quer ver como funciona antes?
+            <button type="button" id="ver-exemplo" class="mini">Ver um exemplo</button>
+          </li>
+        </ol>
+        <p id="imp-erro" class="erro" hidden></p>
+      </div>
+
+      <div id="imp-revisao" hidden>
+        <h2 id="rev-titulo">Revisão da importação</h2>
+        <p id="rev-exemplo" class="aviso-exemplo" hidden>Este é um <b>extrato de exemplo</b>, com dados fictícios, para você ver
+          como funciona. Pode mexer e salvar à vontade; depois toque em “Apagar exemplos” no Resumo.</p>
+        <p class="dica">Confira cada linha: ajuste o tipo, a categoria e marque o que foi essencial.
+          Em empréstimos, confira o nome da pessoa. Linhas desmarcadas não serão salvas.</p>
+        <div class="acoes-lote">
+          <button type="button" id="todos-ess">Marcar gastos como essenciais</button>
+          <button type="button" id="todos-nao">Marcar gastos como não essenciais</button>
+        </div>
+        <div class="tabela-wrap">
+          <table class="tabela revisao">
+            <thead><tr><th>Salvar</th><th>Data</th><th>Descrição</th><th class="num">Valor</th><th>Tipo</th><th>Categoria / Pessoa</th><th>Essencial?</th></tr></thead>
+            <tbody id="tb-revisao"></tbody>
+          </table>
+        </div>
+        <div class="rodape-rev">
+          <p id="rev-resumo" class="legenda"></p>
+          <div class="acoes">
+            <button type="button" id="cancelar-imp" class="sec">Cancelar</button>
+            <button type="button" id="confirmar-imp">Salvar<span class="so-desk"> lançamentos</span></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- NUVEM -->
+    <section id="aba-nuvem" class="aba" hidden>
+      <div id="nuvem-off">
+        <div class="bloco">
+          <p><b>Guarde seus dados na nuvem para não perder nada</b> e para usar no celular e no computador.</p>
+          <ul class="dica">
+            <li>Tudo é <b>criptografado no seu aparelho</b> com a sua senha antes de sair dele.
+              O servidor só guarda um bloco embaralhado: <b>ninguém</b>, nem quem mantém o app, consegue ler.</li>
+            <li>Por isso, <b>se você esquecer a senha, não existe recuperação</b> do backup da nuvem.
+              Anote em um lugar seguro.</li>
+            <li>Depois de entrar, cada alteração é enviada sozinha.</li>
+          </ul>
+        </div>
+        <p id="nuvem-indisponivel" class="erro" hidden>A nuvem só funciona no site publicado do app.
+          Aqui os dados ficam só neste navegador.</p>
+        <div class="origem" style="margin-bottom:12px">
+          <label><input type="radio" name="modo-nuvem" value="entrar" checked> Já tenho conta</label>
+          <label><input type="radio" name="modo-nuvem" value="criar"> Criar conta</label>
+        </div>
+        <form id="form-nuvem" class="form">
+          <input name="usuario" placeholder="Nome de usuário" autocomplete="username" required>
+          <input name="senha" type="password" placeholder="Senha (mín. 10 caracteres)" autocomplete="current-password" minlength="10" required>
+          <input name="senha2" type="password" placeholder="Repita a senha" autocomplete="new-password" class="so-criar" hidden>
+          <button type="submit" id="btn-nuvem">Entrar</button>
+        </form>
+        <p id="nuvem-msg" class="legenda"></p>
+      </div>
+      <div id="nuvem-on" hidden>
+        <div class="bloco">
+          <p>☁ Conectada como <b id="nuvem-usuario"></b></p>
+          <p class="legenda" id="nuvem-estado"></p>
+          <p><button type="button" id="nuvem-sync">Sincronizar agora</button>
+            <button type="button" id="nuvem-sair" class="sec">Sair deste aparelho</button></p>
+          <p class="dica">Para usar em outro aparelho: abra o mesmo link, vá em ☁ Nuvem → “Já tenho conta”
+            e entre com o mesmo usuário e senha.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMO USAR -->
+    <section id="aba-ajuda" class="aba tutorial" hidden>
+      <h2>Como usar, em 5 passos</h2>
+      <ol>
+        <li><b>Cadastre o básico (uma vez só).</b>
+          <ul>
+            <li><b>Renda</b>: seu salário e outras rendas que caem todo mês.</li>
+            <li><b>Contas fixas</b>: aluguel, luz, internet, escola… com o valor e o dia.</li>
+            <li><b>Cartão</b>: cada cartão com o dia de fechamento e de vencimento.</li>
+          </ul>
+        </li>
+        <li><b>Importe o extrato do banco (1× por mês ou quando quiser).</b>
+          <ul>
+            <li>Na aba <b>Importar</b>, deixe marcado <i>Extrato da conta</i>.</li>
+            <li>Baixe o <b>modelo de planilha</b> e clique em <b>Copiar pedido</b>.</li>
+            <li>Abra o ChatGPT/Claude/Gemini, anexe o extrato do banco (PDF ou print) + o modelo,
+              cole o pedido e envie.</li>
+            <li>Baixe o arquivo que a IA devolver e selecione no app.</li>
+          </ul>
+        </li>
+        <li><b>Revise.</b> Confira cada linha: corrija a categoria, marque <b>Sim</b> (essencial) ou
+          <b>Não</b> (supérfluo), confira o nome da pessoa nos empréstimos e clique em <b>Salvar lançamentos</b>.
+          Linhas em vermelho estão faltando informação.</li>
+        <li><b>Importe a fatura do cartão</b> do mesmo jeito: em <b>Importar</b>, escolha
+          <i>Fatura do cartão</i>, o cartão e o mês de vencimento, copie o pedido (é diferente do extrato)
+          e repita.</li>
+        <li><b>Acompanhe no Resumo e no Relatório.</b> O Resumo mostra o mês: quanto entrou, quanto saiu
+          e quanto deve sobrar. O <b>Relatório</b> mostra para onde o dinheiro foi (por categoria, mês a mês,
+          essencial × não essencial, onde você mais gasta) e tem um botão para copiar e mandar por mensagem.</li>
+      </ol>
+      <h2>Dicas</h2>
+      <ul>
+        <li>Gastou algo agora? Lance na hora em <b>Lançamentos</b>, sem esperar o extrato.</li>
+        <li>Emprestou dinheiro ou alguém te devolveu? Isso fica em <b>Empréstimos</b> e não conta como gasto.
+          A IA tenta identificar sozinha; confira na revisão.</li>
+        <li>Pagou uma conta fixa? Marque como paga em <b>Contas fixas</b> (ou ela é marcada sozinha na importação).</li>
+        <li>Use as setas ‹ › lá em cima para trocar de mês.</li>
+        <li>Ative a <b>☁ Nuvem</b> para não perder seus dados se trocar de celular ou limpar o navegador.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <button id="exportar" class="link">Fazer backup</button> ·
+    <label class="link">Restaurar backup<input type="file" id="restaurar" accept=".json" hidden></label>
+  </footer>
+
+  <datalist id="lista-categorias"></datalist>
+  <datalist id="lista-pessoas"></datalist>
+  <div id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-msg">
+    <div class="modal-caixa">
+      <p id="modal-msg"></p>
+      <div class="acoes">
+        <button type="button" id="modal-nao" class="sec">Cancelar</button>
+        <button type="button" id="modal-sim">Confirmar</button>
+      </div>
+    </div>
+  </div>
+  <div id="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

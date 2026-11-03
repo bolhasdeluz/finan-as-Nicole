@@ -1,0 +1,7 @@
+data;descricao;valor;tipo;categoria;essencial;pessoa;parcela
+05/11/2026;Aluguel;1500,00;fixa;Moradia;sim;;
+05/11/2026;Salário Empresa X;4200,00;renda;;;;
+07/11/2026;Supermercado Extra;312,45;flexivel;Mercado;sim;;
+12/11/2026;Pix para Maria Souza;200,00;emprestimo-saiu;;;Maria Souza;
+25/11/2026;Pix de Maria Souza;200,00;emprestimo-entrou;;;Maria Souza;
+10/11/2026;Pagamento fatura Nubank;980,00;fatura;;;;

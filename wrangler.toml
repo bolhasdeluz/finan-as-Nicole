@@ -1,0 +1,12 @@
+name = "financas-nicole"
+main = "worker/index.js"
+compatibility_date = "2025-09-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# Banco KV exclusivo deste app (financas-nicole-cofres)
+[[kv_namespaces]]
+binding = "COFRES"
+id = "0c8e019803044c9eb66657032d9cec7e"
