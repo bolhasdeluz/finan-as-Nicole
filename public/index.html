@@ -19,16 +19,18 @@
   <nav>
     <button data-aba="resumo" class="ativa"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11M10 20V5M16 20v-6M21 20H3"/></svg><span>Resumo</span></button>
     <button data-aba="lancamentos"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg><span>Lançamentos</span></button>
-    <button data-aba="cartao"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19M6 15h4"/></svg><span>Cartão</span></button>
+    <button data-aba="relatorio"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg><span>Relatório</span></button>
+    <button data-aba="cartao" class="sec-aba"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19M6 15h4"/></svg><span>Cartão</span></button>
     <button data-aba="fixas" class="sec-aba">Contas fixas</button>
     <button data-aba="renda" class="sec-aba">Renda</button>
     <button data-aba="emprestimos" class="sec-aba">Empréstimos</button>
     <button data-aba="importar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg><span>Importar</span></button>
     <button data-aba="nuvem" class="sec-aba">☁ Nuvem</button>
-    <button data-aba="ajuda" class="sec-aba">Como usar</button>
+    <button data-aba="ajuda" class="sec-aba">Ajuda</button>
     <button type="button" id="btn-mais" aria-expanded="false" aria-controls="menu-mais"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg><span>Mais</span></button>
   </nav>
   <div id="menu-mais" hidden>
+    <button type="button" data-aba="cartao">Cartão</button>
     <button type="button" data-aba="fixas">Contas fixas</button>
     <button type="button" data-aba="renda">Renda</button>
     <button type="button" data-aba="emprestimos">Empréstimos</button>
@@ -66,6 +68,58 @@
 
       <h2>Gastos por categoria</h2>
       <ul id="r-categorias" class="lista-cat"></ul>
+    </section>
+
+    <!-- RELATÓRIO -->
+    <section id="aba-relatorio" class="aba" hidden>
+      <div class="rel-filtros">
+        <label for="rel-periodo">Período</label>
+        <select id="rel-periodo">
+          <option value="1">Só este mês</option>
+          <option value="3" selected>Últimos 3 meses</option>
+          <option value="6">Últimos 6 meses</option>
+          <option value="12">Últimos 12 meses</option>
+        </select>
+        <span class="rel-acoes">
+          <button type="button" id="rel-copiar" class="sec">Copiar relatório</button>
+          <button type="button" id="rel-imprimir" class="sec" hidden>Imprimir / PDF</button>
+        </span>
+      </div>
+      <p id="rel-frase" class="rel-frase"></p>
+      <div class="cards" id="rel-cards"></div>
+
+      <h2>Para onde foi o dinheiro</h2>
+      <p class="legenda">Gastos por categoria no período. Toque numa categoria para ver os maiores gastos dela.</p>
+      <div id="rel-categorias" class="rel-cats"></div>
+
+      <div id="rel-mensal-bloco">
+        <h2>Mês a mês</h2>
+        <div class="rel-legenda">
+          <span><i class="chave ess"></i>Essencial</span>
+          <span><i class="chave nao"></i>Não essencial</span>
+          <span><i class="chave linha"></i>Renda</span>
+        </div>
+        <div id="rel-mensal" class="rel-grafico"></div>
+        <details class="rel-tabela">
+          <summary>Ver em tabela</summary>
+          <div class="tabela-wrap"><table class="tabela" id="rel-tabela"></table></div>
+        </details>
+      </div>
+
+      <h2>Como o dinheiro foi gasto</h2>
+      <div id="rel-divisoes" class="rel-divisoes"></div>
+
+      <div class="rel-duas">
+        <div>
+          <h2>Onde você mais gasta</h2>
+          <ol id="rel-lugares" class="rel-ranking"></ol>
+        </div>
+        <div>
+          <h2>Maiores gastos</h2>
+          <ol id="rel-maiores" class="rel-ranking"></ol>
+        </div>
+      </div>
+      <div id="rel-dica" class="rel-tooltip" hidden></div>
     </section>
 
     <!-- LANÇAMENTOS -->
@@ -304,8 +358,9 @@
         <li><b>Importe a fatura do cartão</b> do mesmo jeito: em <b>Importar</b>, escolha
           <i>Fatura do cartão</i>, o cartão e o mês de vencimento, copie o pedido (é diferente do extrato)
           e repita.</li>
-        <li><b>Acompanhe no Resumo.</b> Lá aparece quanto entrou, quanto saiu, quanto deve sobrar,
-          o que foi essencial e em que categoria o dinheiro foi.</li>
+        <li><b>Acompanhe no Resumo e no Relatório.</b> O Resumo mostra o mês: quanto entrou, quanto saiu
+          e quanto deve sobrar. O <b>Relatório</b> mostra para onde o dinheiro foi (por categoria, mês a mês,
+          essencial × não essencial, onde você mais gasta) e tem um botão para copiar e mandar por mensagem.</li>
       </ol>
       <h2>Dicas</h2>
       <ul>

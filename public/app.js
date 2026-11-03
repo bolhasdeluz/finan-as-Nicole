@@ -245,7 +245,7 @@ function render() {
   $('#form-lanc').forma.innerHTML = '<option value="">Pago na conta</option>'
     + estado.cartoes.map((c) => `<option value="${c.id}">Cartão ${esc(c.nome)}</option>`).join('');
   $('#banner-exemplo').hidden = !temExemplos();
-  renderResumo(); renderLancamentos(); renderCartoes(); renderFixas(); renderRendas(); renderEmprestimos();
+  renderResumo(); renderLancamentos(); renderCartoes(); renderFixas(); renderRendas(); renderEmprestimos(); renderRelatorio();
   renderOrigemImportacao();
 }
 
@@ -415,9 +415,224 @@ function renderEmprestimos() {
   }).join('');
 }
 
+/* ================= Relatório ================= */
+
+const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const mesCurto = (ym) => `${MESES_CURTOS[Number(ym.slice(5, 7)) - 1]}/${ym.slice(2, 4)}`;
+const pct = (parte, todo) => (todo ? Math.round((parte / todo) * 100) : 0);
+/** valores curtos para eixos: R$ 800 · R$ 1,5 mil · R$ 12 mil */
+const brlCurto = (v) => (v >= 1000 ? `R$ ${(v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: v >= 10000 ? 0 : 1 })} mil` : `R$ ${Math.round(v)}`);
+
+function mesesAte(fim, n) {
+  const [a, m] = fim.split('-').map(Number);
+  return Array.from({ length: n }, (_, i) => anoMes(new Date(a, m - n + i, 1)));
+}
+
+function dadosPeriodo(meses) {
+  const ls = estado.lancamentos.filter((l) => meses.includes(mesDe(l)));
+  const gastos = ls.filter(ehGasto);
+  return {
+    ls, gastos,
+    renda: soma(ls.filter((l) => l.tipo === 'renda')),
+    total: soma(gastos),
+    ess: soma(gastos.filter((l) => l.essencial)),
+    fixas: soma(gastos.filter((l) => l.tipo === 'fixa')),
+    cartao: soma(gastos.filter((l) => l.cartaoId)),
+  };
+}
+
+let relCategoriaAberta = null;
+
+function renderRelatorio() {
+  const n = Number($('#rel-periodo').value);
+  const meses = mesesAte(mesAtual, n);
+  const d = dadosPeriodo(meses);
+  const ant = dadosPeriodo(mesesAte(meses[0], n + 1).slice(0, n)); // período anterior, mesmo tamanho
+  const nomePeriodo = n === 1 ? nomeMes(mesAtual).toLowerCase() : `${mesCurto(meses[0])} a ${mesCurto(meses.at(-1))}`;
+  const sobra = d.renda - d.total;
+
+  // frase-resumo
+  const cats = {};
+  d.gastos.forEach((l) => { cats[l.categoria] = (cats[l.categoria] || 0) + l.valor; });
+  const ordem = Object.entries(cats).sort((x, y) => y[1] - x[1]);
+  const partes = [];
+  if (!d.total && !d.renda) {
+    partes.push(`Ainda não há lançamentos em ${nomePeriodo}. Importe um extrato ou lance gastos para ver o relatório.`);
+  } else {
+    partes.push(`Em ${nomePeriodo}, entraram <b>${brl(d.renda)}</b> e você gastou <b>${brl(d.total)}</b>.`);
+    if (d.renda) partes.push(sobra >= 0 ? `Sobraram <b>${brl(sobra)}</b> (${pct(sobra, d.renda)}% da renda).` : `Faltaram <b>${brl(-sobra)}</b>: os gastos passaram da renda.`);
+    if (ordem.length) partes.push(`A maior parte foi para <b>${esc(ordem[0][0])}</b>: ${pct(ordem[0][1], d.total)}% dos gastos.`);
+    if (ant.total) {
+      const v = Math.round(((d.total - ant.total) / ant.total) * 100);
+      if (Math.abs(v) >= 1) partes.push(`Os gastos foram ${Math.abs(v)}% ${v > 0 ? 'maiores' : 'menores'} que no período anterior.`);
+    }
+  }
+  $('#rel-frase').innerHTML = partes.join(' ');
+
+  // números principais
+  const tile = (rotulo, valor, extra, cls = '') => `<div class="card"><small>${rotulo}</small><strong class="${cls}">${valor}</strong>${extra ? `<small>${extra}</small>` : ''}</div>`;
+  $('#rel-cards').innerHTML = tile('Renda', brl(d.renda), '', 'pos')
+    + tile('Gastos', brl(d.total), d.renda ? `${pct(d.total, d.renda)}% da renda` : '')
+    + tile(sobra >= 0 ? 'Sobrou' : 'Faltou', brl(Math.abs(sobra)), n > 1 && d.total ? `média de ${brl(d.total / n)} de gastos por mês` : '', sobra >= 0 ? 'pos' : 'neg');
+
+  // para onde foi: barras horizontais por categoria (até 8 + Outras)
+  let linhas = ordem.slice(0, 8);
+  if (ordem.length > 8) linhas.push(['Outras', ordem.slice(8).reduce((t, x) => t + x[1], 0)]);
+  const maior = linhas[0]?.[1] || 1;
+  $('#rel-categorias').innerHTML = linhas.length ? linhas.map(([c, v]) => {
+    const aberta = relCategoriaAberta === c;
+    const itens = aberta ? d.gastos.filter((l) => (c === 'Outras' ? !linhas.slice(0, 8).some(([k]) => k === l.categoria) : l.categoria === c))
+      .sort((x, y) => y.valor - x.valor).slice(0, 5) : [];
+    return `<div class="rel-cat ${aberta ? 'aberta' : ''}">
+      <button type="button" class="rel-cat-linha" data-cat="${esc(c)}" aria-expanded="${aberta}">
+        <span class="rel-cat-nome">${esc(c)}</span>
+        <span class="rel-cat-valor"><b>${brl(v)}</b> <small>${pct(v, d.total)}%</small></span>
+        <span class="rel-cat-trilho"><span class="rel-cat-barra" style="width:${Math.max(1, (v / maior) * 100)}%"></span></span>
+      </button>
+      ${aberta ? `<ul class="rel-cat-itens">${itens.map((l) => `<li><span>${esc(l.descricao)} <small>${dataBR(l.data)}</small></span><b>${brl(l.valor)}</b></li>`).join('')}</ul>` : ''}
+    </div>`;
+  }).join('') : '<p class="vazio">Sem gastos no período.</p>';
+
+  // mês a mês
+  $('#rel-mensal-bloco').hidden = n === 1;
+  if (n > 1) renderMensal(meses);
+
+  // divisões
+  const divisao = (titulo, a, b, ca, cb, ra, rb) => {
+    const t = a + b;
+    return `<div class="rel-div">
+      <div class="rel-div-titulo">${titulo}</div>
+      <div class="rel-seg">${t ? `<span class="${ca}" style="flex:${a}"></span><span class="${cb}" style="flex:${b}"></span>` : '<span class="vazio-seg"></span>'}</div>
+      <div class="rel-div-legenda">
+        <span><i class="chave ${ca}"></i>${ra} <b>${brl(a)}</b> <small>${pct(a, t)}%</small></span>
+        <span><i class="chave ${cb}"></i>${rb} <b>${brl(b)}</b> <small>${pct(b, t)}%</small></span>
+      </div></div>`;
+  };
+  $('#rel-divisoes').innerHTML = divisao('Necessidade', d.ess, d.total - d.ess, 'ess', 'nao', 'Essencial', 'Não essencial')
+    + divisao('Tipo de gasto', d.fixas, d.total - d.fixas, 'fixa', 'flex', 'Contas fixas', 'Flexíveis')
+    + divisao('Forma de pagamento', d.total - d.cartao, d.cartao, 'conta', 'cartao', 'Na conta', 'No cartão');
+
+  // onde mais gasta (agrupado pela descrição) e maiores gastos
+  const lugares = {};
+  d.gastos.forEach((l) => {
+    const k = norm(l.descricao);
+    if (!lugares[k]) lugares[k] = { nome: l.descricao, total: 0, vezes: 0 };
+    lugares[k].total += l.valor; lugares[k].vezes += 1;
+  });
+  const topL = Object.values(lugares).sort((x, y) => y.total - x.total).slice(0, 5);
+  $('#rel-lugares').innerHTML = topL.length ? topL.map((x) => `<li><span>${esc(x.nome)} <small>${x.vezes}×</small></span><b>${brl(x.total)}</b></li>`).join('') : '<li class="vazio">—</li>';
+  const topG = [...d.gastos].sort((x, y) => y.valor - x.valor).slice(0, 5);
+  $('#rel-maiores').innerHTML = topG.length ? topG.map((l) => `<li><span>${esc(l.descricao)} <small>${dataBR(l.data)}</small></span><b>${brl(l.valor)}</b></li>`).join('') : '<li class="vazio">—</li>';
+}
+
+/** colunas empilhadas (essencial + não essencial) com a renda marcada por um traço */
+function renderMensal(meses) {
+  const dados = meses.map((m) => ({ m, ...dadosPeriodo([m]) }));
+  const topo = Math.max(1, ...dados.map((x) => Math.max(x.total, x.renda)));
+  const passo = [100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000, 20000, 25000, 50000].find((p) => topo / p <= 4) || 100000;
+  const maxY = Math.ceil(topo / passo) * passo;
+  const W = Math.max(300, Math.round($('#rel-mensal').clientWidth || 640)), H = W < 520 ? 210 : 240, esq = 56, dir = 8, cima = 12, baixo = 28;
+  const larg = (W - esq - dir) / meses.length;
+  const barra = Math.min(24, larg * 0.5);
+  const Y = (v) => cima + (H - cima - baixo) * (1 - v / maxY);
+  const ticks = []; for (let v = 0; v <= maxY; v += passo) ticks.push(v);
+  const cx = (i) => esq + larg * i + larg / 2;
+  const coluna = (x, y0, y1, cls, arredonda) => {
+    if (y0 - y1 < 0.5) return '';
+    const h = y0 - y1, r = arredonda ? Math.min(4, h) : 0, xa = x - barra / 2;
+    return `<path class="${cls}" d="M${xa} ${y0}V${y1 + r}${r ? `Q${xa} ${y1} ${xa + r} ${y1}` : ''}H${xa + barra - r}${r ? `Q${xa + barra} ${y1} ${xa + barra} ${y1 + r}` : ''}V${y0}Z"/>`;
+  };
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Gastos e renda mês a mês">`;
+  svg += ticks.map((v) => `<line class="grade" x1="${esq}" x2="${W - dir}" y1="${Y(v)}" y2="${Y(v)}"/><text class="eixo" x="${esq - 8}" y="${Y(v) + 4}" text-anchor="end">${brlCurto(v)}</text>`).join('');
+  dados.forEach((x, i) => {
+    const c = cx(i), base = Y(0), yEss = Y(x.ess), yTot = Y(x.total);
+    const naoE = x.total - x.ess;
+    svg += `<g class="mes-col" data-i="${i}" tabindex="0">`;
+    svg += `<rect class="alvo" x="${esq + larg * i}" y="${cima}" width="${larg}" height="${H - cima - baixo}"/>`;
+    svg += coluna(c, base, yEss, 'ess', naoE < 0.005);
+    if (naoE >= 0.005) svg += coluna(c, yEss - (x.ess ? 2 : 0), yTot - (x.ess ? 2 : 0), 'nao', true);
+    if (x.renda) svg += `<line class="renda" x1="${c - barra / 2 - 6}" x2="${c + barra / 2 + 6}" y1="${Y(x.renda)}" y2="${Y(x.renda)}"/>`;
+    svg += `<text class="eixo" x="${c}" y="${H - 8}" text-anchor="middle">${mesCurto(x.m)}</text></g>`;
+  });
+  svg += `<line class="base" x1="${esq}" x2="${W - dir}" y1="${Y(0)}" y2="${Y(0)}"/></svg>`;
+  $('#rel-mensal').innerHTML = svg;
+  $('#rel-mensal').dados = dados;
+  $('#rel-tabela').innerHTML = `<thead><tr><th>Mês</th><th class="num">Renda</th><th class="num">Essencial</th><th class="num">Não essencial</th><th class="num">Total gasto</th><th class="num">Sobra</th></tr></thead><tbody>`
+    + dados.map((x) => `<tr><td>${nomeMes(x.m)}</td><td class="num">${brl(x.renda)}</td><td class="num">${brl(x.ess)}</td><td class="num">${brl(x.total - x.ess)}</td><td class="num">${brl(x.total)}</td><td class="num ${x.renda - x.total < 0 ? 'neg' : ''}">${brl(x.renda - x.total)}</td></tr>`).join('') + '</tbody>';
+}
+
+function mostrarDica(g) {
+  const x = $('#rel-mensal').dados[g.dataset.i];
+  const dica = $('#rel-dica');
+  dica.innerHTML = '';
+  const t = document.createElement('div'); t.className = 'dica-titulo'; t.textContent = nomeMes(x.m); dica.append(t);
+  [['ess', 'Essencial', x.ess], ['nao', 'Não essencial', x.total - x.ess], ['linha', 'Renda', x.renda], ['', 'Sobra', x.renda - x.total]].forEach(([cls, rot, v]) => {
+    const r = document.createElement('div'); r.className = 'dica-linha';
+    const k = document.createElement('i'); k.className = 'chave ' + cls;
+    const b = document.createElement('b'); b.textContent = brl(v);
+    const s = document.createElement('span'); s.textContent = rot;
+    r.append(k, b, s); dica.append(r);
+  });
+  dica.hidden = false;
+  const caixa = g.getBoundingClientRect(), sec = $('#aba-relatorio').getBoundingClientRect();
+  const left = Math.min(Math.max(0, caixa.left - sec.left + caixa.width / 2 - dica.offsetWidth / 2), sec.width - dica.offsetWidth);
+  dica.style.left = `${left}px`;
+  dica.style.top = `${caixa.top - sec.top - dica.offsetHeight + 8}px`;
+  document.querySelectorAll('.mes-col.ativo').forEach((e) => e.classList.remove('ativo'));
+  g.classList.add('ativo');
+}
+function esconderDica() {
+  $('#rel-dica').hidden = true;
+  document.querySelectorAll('.mes-col.ativo').forEach((e) => e.classList.remove('ativo'));
+}
+$('#rel-mensal').addEventListener('pointerover', (e) => { const g = e.target.closest('.mes-col'); if (g) mostrarDica(g); });
+$('#rel-mensal').addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') esconderDica(); });
+document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#rel-mensal')) esconderDica(); });
+let timerRel = null;
+window.addEventListener('resize', () => {
+  clearTimeout(timerRel);
+  timerRel = setTimeout(() => { if (!$('#aba-relatorio').hidden) renderRelatorio(); }, 150);
+});
+$('#rel-mensal').addEventListener('focusin', (e) => { const g = e.target.closest('.mes-col'); if (g) mostrarDica(g); });
+$('#rel-mensal').addEventListener('focusout', esconderDica);
+
+$('#rel-periodo').onchange = () => { relCategoriaAberta = null; renderRelatorio(); };
+$('#rel-categorias').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-cat]'); if (!b) return;
+  relCategoriaAberta = relCategoriaAberta === b.dataset.cat ? null : b.dataset.cat;
+  renderRelatorio();
+});
+
+/** texto do relatório para colar no WhatsApp ou e-mail */
+$('#rel-copiar').onclick = async () => {
+  const n = Number($('#rel-periodo').value);
+  const meses = mesesAte(mesAtual, n);
+  const d = dadosPeriodo(meses);
+  const cats = {};
+  d.gastos.forEach((l) => { cats[l.categoria] = (cats[l.categoria] || 0) + l.valor; });
+  const linhas = [
+    `Relatório de gastos: ${n === 1 ? nomeMes(mesAtual) : `${nomeMes(meses[0])} a ${nomeMes(meses.at(-1))}`}`,
+    '',
+    `Renda: ${brl(d.renda)}`,
+    `Gastos: ${brl(d.total)}`,
+    `${d.renda - d.total >= 0 ? 'Sobrou' : 'Faltou'}: ${brl(Math.abs(d.renda - d.total))}`,
+    `Essencial: ${brl(d.ess)} (${pct(d.ess, d.total)}%) · Não essencial: ${brl(d.total - d.ess)} (${pct(d.total - d.ess, d.total)}%)`,
+    '',
+    'Por categoria:',
+    ...Object.entries(cats).sort((x, y) => y[1] - x[1]).map(([c, v]) => `• ${c}: ${brl(v)} (${pct(v, d.total)}%)`),
+  ];
+  try { await navigator.clipboard.writeText(linhas.join('\n')); toast('Relatório copiado! Cole onde quiser.'); }
+  catch { toast('Não foi possível copiar'); }
+};
+
+// imprimir só faz sentido fora de páginas incorporadas (no site publicado)
+try { $('#rel-imprimir').hidden = window.self !== window.top; } catch (e) { /* incorporado */ }
+$('#rel-imprimir').onclick = () => window.print();
+
+
 /* ================= Navegação ================= */
 
-const ABAS_MAIS = ['fixas', 'renda', 'emprestimos', 'nuvem', 'ajuda'];
+const ABAS_MAIS = ['cartao', 'fixas', 'renda', 'emprestimos', 'nuvem', 'ajuda'];
 function abrirMais(abrir) {
   $('#menu-mais').hidden = !abrir;
   $('#btn-mais').setAttribute('aria-expanded', String(abrir));
@@ -427,6 +642,7 @@ function irPara(aba) {
   $('#btn-mais').classList.toggle('ativa', ABAS_MAIS.includes(aba));
   document.querySelectorAll('.aba').forEach((s) => { s.hidden = s.id !== 'aba-' + aba; });
   abrirMais(false);
+  if (aba === 'relatorio') { esconderDica(); renderRelatorio(); }
   window.scrollTo(0, 0);
 }
 document.querySelectorAll('nav [data-aba], #menu-mais [data-aba]').forEach((b) => b.addEventListener('click', () => irPara(b.dataset.aba)));

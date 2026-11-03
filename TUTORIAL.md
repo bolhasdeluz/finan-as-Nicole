@@ -26,8 +26,13 @@
 **Fatura do cartão**: igual, mas em **Importar** escolha *Fatura do cartão*, o cartão e o mês
 de vencimento. O pedido para a IA é outro, então copie de novo.
 
-**Resumo**: mostra quanto entrou, quanto saiu, quanto deve sobrar, o que foi essencial e para
-onde foi o dinheiro. Use ‹ › no topo para trocar de mês.
+**Resumo**: mostra quanto entrou, quanto saiu e quanto deve sobrar no mês. Use ‹ › no topo
+para trocar de mês.
+
+**Relatório**: mostra para onde o dinheiro foi no período que você escolher (este mês, 3, 6 ou
+12 meses): gastos por categoria (toque numa para ver os maiores gastos dela), gráfico mês a mês
+com renda e gastos, essencial × não essencial, contas fixas × flexíveis, onde você mais gasta e os
+maiores gastos. O botão **Copiar relatório** copia um resumo em texto para colar no WhatsApp.
 
 ## Dicas
 
