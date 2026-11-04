@@ -1,4 +1,4 @@
-name = "financas-nicole"
+name = "minhas-financas"
 main = "worker/index.js"
 compatibility_date = "2025-09-01"
 
@@ -6,7 +6,7 @@ compatibility_date = "2025-09-01"
 directory = "./public"
 binding = "ASSETS"
 
-# Banco KV exclusivo deste app (financas-nicole-cofres)
+# Banco KV exclusivo deste app (minhas-financas-cofres)
 [[kv_namespaces]]
 binding = "COFRES"
-id = "0c8e019803044c9eb66657032d9cec7e"
+id = "d336ef84cf9f4acab30c237f01b5145d"

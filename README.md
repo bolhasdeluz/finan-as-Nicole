@@ -1,10 +1,13 @@
-# Finanças da Nicole
+# Minhas Finanças
+
+> Cópia de uso pessoal do app da Nicole (branch `minhas-financas`), publicada como um app separado,
+> com banco próprio. O app da Nicole fica na branch `claude/app-controle-gastos`.
 
 App super simples de controle de gastos mensais. Roda no navegador (celular ou computador).
 Os dados ficam no próprio aparelho e, se a pessoa ativar a **☁ Nuvem**, também num backup
 **criptografado de ponta a ponta** no Cloudflare.
 
-- **App no ar:** https://financas-nicole.bolhasdeluz.workers.dev
+- **App no ar:** https://minhas-financas.bolhasdeluz.workers.dev
 - Tutorial para quem usa: [`TUTORIAL.md`](TUTORIAL.md) (o mesmo texto está na aba **Como usar** do app).
 - Para testar sem publicar: abra `public/index.html` no navegador (a nuvem só funciona pelo link https).
 
