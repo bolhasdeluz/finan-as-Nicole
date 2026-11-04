@@ -370,3 +370,18 @@ p.aviso-exemplo { display: block; }
 }
 
 .rel-grafico, .rel-grafico * { -webkit-tap-highlight-color: transparent; }
+
+/* --- bancos --- */
+.lista-bancos { display: grid; gap: 8px; margin-bottom: 8px; }
+.banco-item { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; background: var(--card); border: 1px solid var(--borda); border-radius: 12px; padding: 10px 14px; }
+.banco-item .legenda { flex: 1 1 260px; }
+.banco-item b.pos { color: var(--ess); }
+.rel-cat-linha.estatica { cursor: default; }
+.rel-cat-linha.estatica:hover { background: none; }
+.revisao .banco-sel { margin-top: 4px; font-size: .82rem; }
+#origem-banco { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+@media (max-width: 640px) {
+  .rel-filtros { display: grid; grid-template-columns: auto 1fr; }
+  .rel-filtros select { width: 100%; }
+  .rel-acoes { grid-column: 1 / -1; }
+}

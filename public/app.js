@@ -21,7 +21,7 @@ const TIPOS_CARTAO = ['flexivel', 'fixa', 'emp-saiu'];
 const ehGasto = (l) => l.tipo === 'fixa' || l.tipo === 'flexivel';
 const ehEmp = (l) => l.tipo === 'emp-saiu' || l.tipo === 'emp-entrou';
 
-const CABECALHO = 'data;descricao;valor;tipo;categoria;essencial;pessoa;parcela';
+const CABECALHO = 'data;descricao;valor;tipo;categoria;essencial;pessoa;parcela;banco';
 const REGRAS_GASTO = `- categoria (só para fixa e flexivel): use uma destas: ${CATEGORIAS_PADRAO.join(', ')}
 - essencial (só para fixa e flexivel): "sim" se for necessidade (moradia, contas, mercado, saúde, transporte para trabalho); "nao" se for supérfluo (delivery, lazer, compras por impulso)`;
 
@@ -43,7 +43,8 @@ Preencha o modelo com as movimentações do extrato, uma por linha, seguindo est
 - pessoa: nome da pessoa, só nas linhas de empréstimo
 ${REGRAS_GASTO}
 - parcela: deixe em branco
-- NÃO inclua transferências entre contas minhas nem aplicações/resgates de investimento
+- banco: nome do banco de onde veio cada movimentação (ex.: Itaú, Nubank, Inter). Se eu anexar vários extratos, preencha em todas as linhas
+- NÃO inclua transferências entre contas minhas (ex.: Pix do meu Itaú para o meu Nubank) nem aplicações/resgates de investimento. Se a mesma quantia sai de um extrato meu e entra em outro extrato meu, é transferência: apague as duas linhas
 - Apague as linhas de exemplo do modelo
 
 Devolva apenas o arquivo .csv preenchido, pronto para download.`;
@@ -62,6 +63,7 @@ Preencha o modelo com as COMPRAS da fatura, uma por linha, seguindo estas regras
 - pessoa: nome da pessoa, só nas linhas de emprestimo-saiu
 ${REGRAS_GASTO}
 - parcela: se a compra for parcelada, a parcela atual no formato 3/10; senão deixe em branco
+- banco: deixe em branco
 - Inclua juros, IOF, multa e anuidade com a categoria Impostos/Taxas
 - NÃO inclua o pagamento da fatura anterior nem créditos/estornos (se houver estorno, remova também a compra estornada)
 - Apague as linhas de exemplo do modelo
@@ -69,7 +71,7 @@ ${REGRAS_GASTO}
 Devolva apenas o arquivo .csv preenchido, pronto para download.`;
 
 function estadoVazio() {
-  return { lancamentos: [], fixas: [], rendas: [], cartoes: [], memoria: {} };
+  return { lancamentos: [], fixas: [], rendas: [], cartoes: [], bancos: [], memoria: {} };
 }
 
 function carregar() {
@@ -205,6 +207,26 @@ function categorias() {
   estado.fixas.forEach((f) => f.categoria && set.add(f.categoria));
   return [...set];
 }
+const bancoPorId = (id) => estado.bancos.find((b) => b.id === id);
+/** de onde saiu/entrou o dinheiro: 'c:<cartão>', 'b:<banco>' ou '' (não informado) */
+function fonteDe(l) {
+  if (l.cartaoId && l.tipo !== 'fatura') return 'c:' + l.cartaoId;
+  return l.bancoId ? 'b:' + l.bancoId : '';
+}
+function nomeFonte(f) {
+  if (!f) return 'Sem banco informado';
+  const id = f.slice(2);
+  if (f[0] === 'c') { const c = cartaoPorId(id); return c ? `Cartão ${c.nome}` : 'Cartão excluído'; }
+  const b = bancoPorId(id); return b ? b.nome : 'Banco excluído';
+}
+/** acha o banco pelo nome (Itaú, itau, ITAÚ…) ou cadastra um novo */
+function acharOuCriarBanco(nome, exemplo = false) {
+  const n = norm(nome); if (!n) return '';
+  let b = estado.bancos.find((x) => norm(x.nome) === n) || sugerir(estado.bancos, nome);
+  if (!b) { b = { id: uid(), nome: nome.trim(), ...(exemplo ? { exemplo: true } : {}) }; estado.bancos.push(b); }
+  return b.id;
+}
+const opcoesBancos = (sel) => estado.bancos.map((b) => `<option value="${b.id}" ${sel === b.id ? 'selected' : ''}>${esc(b.nome)}</option>`).join('');
 const pessoas = () => [...new Set(estado.lancamentos.filter(ehEmp).map((l) => l.pessoa))].sort();
 
 /** mês em que o lançamento conta (compras no cartão contam no mês de vencimento da fatura) */
@@ -242,9 +264,22 @@ function render() {
   $('#mes-label').textContent = nomeMes(mesAtual);
   $('#lista-categorias').innerHTML = categorias().map((c) => `<option value="${esc(c)}">`).join('');
   $('#lista-pessoas').innerHTML = pessoas().map((p) => `<option value="${esc(p)}">`).join('');
-  $('#form-lanc').forma.innerHTML = '<option value="">Pago na conta</option>'
-    + estado.cartoes.map((c) => `<option value="${c.id}">Cartão ${esc(c.nome)}</option>`).join('');
+  const formaAtual = $('#form-lanc').forma.value;
+  $('#form-lanc').forma.innerHTML = '<option value="">Conta não informada</option>'
+    + estado.bancos.map((b) => `<option value="b:${b.id}">Conta ${esc(b.nome)}</option>`).join('')
+    + estado.cartoes.map((c) => `<option value="c:${c.id}">Cartão ${esc(c.nome)}</option>`).join('');
+  const selForma = $('#form-lanc').forma;
+  const valida = [...selForma.options].some((o) => o.value === formaAtual);
+  selForma.value = selForma.dataset.escolhido === '1' && valida ? formaAtual : (estado.bancos[0] ? 'b:' + estado.bancos[0].id : '');
   $('#banner-exemplo').hidden = !temExemplos();
+  document.querySelectorAll('select.sel-banco').forEach((sel) => {
+    const v = sel.value;
+    sel.innerHTML = `<option value="">${esc(sel.dataset.vazio)}</option>` + opcoesBancos(v);
+    sel.value = bancoPorId(v) ? v : '';
+    sel.hidden = !estado.bancos.length;
+  });
+  renderBancos();
+  ajustarFormLanc();
   renderResumo(); renderLancamentos(); renderCartoes(); renderFixas(); renderRendas(); renderEmprestimos(); renderRelatorio();
   renderOrigemImportacao();
 }
@@ -303,6 +338,8 @@ function rotuloTipo(l) {
   if (ehEmp(l)) t += ` · ${esc(l.pessoa)}`;
   const c = l.cartaoId && cartaoPorId(l.cartaoId);
   if (c) t += ` · 💳 ${esc(c.nome)}`;
+  const b = !c && l.bancoId && bancoPorId(l.bancoId);
+  if (b) t += ` · 🏦 ${esc(b.nome)}`;
   return t;
 }
 
@@ -314,11 +351,25 @@ function renderLancamentos() {
       <td>${dataBR(l.data)}</td>
       <td class="p">${esc(l.descricao)}${l.parcela ? ` <small class="legenda">(${esc(l.parcela)})</small>` : ''}</td>
       <td class="${ehGasto(l) ? 'so-desk' : ''}"><small>${rotuloTipo(l)}</small></td>
-      <td class="${ehGasto(l) ? '' : 'so-desk'}">${ehGasto(l) ? esc(l.categoria) : '—'}</td>
+      <td class="${ehGasto(l) ? '' : 'so-desk'}">${ehGasto(l) ? esc(l.categoria) + (fonteDe(l) ? `<small class="so-mobile"> · ${esc(nomeFonte(fonteDe(l)))}</small>` : '') : '—'}</td>
       <td>${tagEssencial(l)}</td>
       <td class="num v">${valorComSinal(l)}</td>
       <td><button class="del" data-del-lanc="${l.id}" title="Excluir" aria-label="Excluir">✕</button></td>
     </tr>`).join('');
+}
+
+function renderBancos() {
+  $('#bancos-vazio').hidden = estado.bancos.length > 0;
+  $('#lista-bancos').innerHTML = estado.bancos.map((b) => {
+    const ls = doMes(mesAtual).filter((l) => fonteDe(l) === 'b:' + b.id);
+    const saiu = soma(ls.filter((l) => !['renda', 'emp-entrou'].includes(l.tipo)));
+    const entrou = soma(ls.filter((l) => ['renda', 'emp-entrou'].includes(l.tipo)));
+    return `<div class="banco-item">
+      <b>🏦 ${esc(b.nome)}</b>
+      <span class="legenda">${nomeMes(mesAtual).toLowerCase()}: saiu <b>${brl(saiu)}</b> · entrou <b class="pos">${brl(entrou)}</b> · ${ls.length} lançamento${ls.length === 1 ? '' : 's'}</span>
+      <button class="del" data-del-banco="${b.id}" title="Excluir banco" aria-label="Excluir banco">✕</button>
+    </div>`;
+  }).join('');
 }
 
 function renderCartoes() {
@@ -331,7 +382,7 @@ function renderCartoes() {
     return `<div class="bloco">
       <div class="bloco-topo">
         <div><b>💳 ${esc(c.nome)}</b>
-          <small class="legenda">fecha dia ${c.fechamento} · vence dia ${c.vencimento}</small></div>
+          <small class="legenda">fecha dia ${c.fechamento} · vence dia ${c.vencimento}${c.bancoId && bancoPorId(c.bancoId) ? ` · ${esc(bancoPorId(c.bancoId).nome)}` : ''}</small></div>
         <button class="del" data-del-cartao="${c.id}" title="Excluir cartão">✕</button>
       </div>
       <p>Fatura de ${nomeMes(mesAtual).toLowerCase()}: <strong>${brl(total)}</strong>
@@ -429,7 +480,8 @@ function mesesAte(fim, n) {
 }
 
 function dadosPeriodo(meses) {
-  const ls = estado.lancamentos.filter((l) => meses.includes(mesDe(l)));
+  const f = $('#rel-fonte').value;
+  const ls = estado.lancamentos.filter((l) => meses.includes(mesDe(l)) && (!f || fonteDe(l) === f));
   const gastos = ls.filter(ehGasto);
   return {
     ls, gastos,
@@ -444,6 +496,11 @@ function dadosPeriodo(meses) {
 let relCategoriaAberta = null;
 
 function renderRelatorio() {
+  // opções do filtro de conta: bancos e cartões cadastrados (+ "sem banco" se houver)
+  const sf = $('#rel-fonte'), fv = sf.value;
+  const fontes = [...estado.bancos.map((b) => 'b:' + b.id), ...estado.cartoes.map((c) => 'c:' + c.id)];
+  sf.innerHTML = '<option value="">Todas as contas</option>' + fontes.map((x) => `<option value="${x}">${esc(nomeFonte(x))}</option>`).join('');
+  sf.value = fontes.includes(fv) ? fv : '';
   const n = Number($('#rel-periodo').value);
   const meses = mesesAte(mesAtual, n);
   const d = dadosPeriodo(meses);
@@ -459,7 +516,7 @@ function renderRelatorio() {
   if (!d.total && !d.renda) {
     partes.push(`Ainda não há lançamentos em ${nomePeriodo}. Importe um extrato ou lance gastos para ver o relatório.`);
   } else {
-    partes.push(`Em ${nomePeriodo}, entraram <b>${brl(d.renda)}</b> e você gastou <b>${brl(d.total)}</b>.`);
+    partes.push(`Em ${nomePeriodo}${sf.value ? `, em <b>${esc(nomeFonte(sf.value))}</b>` : ''}, entraram <b>${brl(d.renda)}</b> e você gastou <b>${brl(d.total)}</b>.`);
     if (d.renda) partes.push(sobra >= 0 ? `Sobraram <b>${brl(sobra)}</b> (${pct(sobra, d.renda)}% da renda).` : `Faltaram <b>${brl(-sobra)}</b>: os gastos passaram da renda.`);
     if (ordem.length) partes.push(`A maior parte foi para <b>${esc(ordem[0][0])}</b>: ${pct(ordem[0][1], d.total)}% dos gastos.`);
     if (ant.total) {
@@ -496,6 +553,19 @@ function renderRelatorio() {
   // mês a mês
   $('#rel-mensal-bloco').hidden = n === 1;
   if (n > 1) renderMensal(meses);
+
+  // gastos por conta e cartão (só quando há mais de uma origem e nenhum filtro)
+  const porFonte = {};
+  d.gastos.forEach((l) => { const k = fonteDe(l); porFonte[k] = (porFonte[k] || 0) + l.valor; });
+  const fontesOrd = Object.entries(porFonte).sort((x, y) => y[1] - x[1]);
+  $('#rel-fontes-bloco').hidden = !!sf.value || fontesOrd.length < 2;
+  const maiorF = fontesOrd[0]?.[1] || 1;
+  $('#rel-fontes').innerHTML = fontesOrd.map(([k, v]) => `<div class="rel-cat">
+      <div class="rel-cat-linha estatica">
+        <span class="rel-cat-nome">${k.startsWith('c:') ? '💳' : '🏦'} ${esc(nomeFonte(k))}</span>
+        <span class="rel-cat-valor"><b>${brl(v)}</b> <small>${pct(v, d.total)}%</small></span>
+        <span class="rel-cat-trilho"><span class="rel-cat-barra" style="width:${Math.max(1, (v / maiorF) * 100)}%"></span></span>
+      </div></div>`).join('');
 
   // divisões
   const divisao = (titulo, a, b, ca, cb, ra, rb) => {
@@ -597,6 +667,7 @@ $('#rel-mensal').addEventListener('focusin', (e) => { const g = e.target.closest
 $('#rel-mensal').addEventListener('focusout', esconderDica);
 
 $('#rel-periodo').onchange = () => { relCategoriaAberta = null; renderRelatorio(); };
+$('#rel-fonte').onchange = () => { relCategoriaAberta = null; renderRelatorio(); };
 $('#rel-categorias').addEventListener('click', (e) => {
   const b = e.target.closest('[data-cat]'); if (!b) return;
   relCategoriaAberta = relCategoriaAberta === b.dataset.cat ? null : b.dataset.cat;
@@ -611,13 +682,19 @@ $('#rel-copiar').onclick = async () => {
   const cats = {};
   d.gastos.forEach((l) => { cats[l.categoria] = (cats[l.categoria] || 0) + l.valor; });
   const linhas = [
-    `Relatório de gastos: ${n === 1 ? nomeMes(mesAtual) : `${nomeMes(meses[0])} a ${nomeMes(meses.at(-1))}`}`,
+    `Relatório de gastos: ${n === 1 ? nomeMes(mesAtual) : `${nomeMes(meses[0])} a ${nomeMes(meses.at(-1))}`}${$('#rel-fonte').value ? ` (${nomeFonte($('#rel-fonte').value)})` : ' (todas as contas)'}`,
     '',
     `Renda: ${brl(d.renda)}`,
     `Gastos: ${brl(d.total)}`,
     `${d.renda - d.total >= 0 ? 'Sobrou' : 'Faltou'}: ${brl(Math.abs(d.renda - d.total))}`,
     `Essencial: ${brl(d.ess)} (${pct(d.ess, d.total)}%) · Não essencial: ${brl(d.total - d.ess)} (${pct(d.total - d.ess, d.total)}%)`,
     '',
+    ...(() => {
+      if ($('#rel-fonte').value) return [];
+      const pf = {}; d.gastos.forEach((l) => { const k = fonteDe(l); pf[k] = (pf[k] || 0) + l.valor; });
+      const o = Object.entries(pf).sort((x, y) => y[1] - x[1]);
+      return o.length > 1 ? ['Por conta e cartão:', ...o.map(([k, v]) => `• ${nomeFonte(k)}: ${brl(v)} (${pct(v, d.total)}%)`), ''] : [];
+    })(),
     'Por categoria:',
     ...Object.entries(cats).sort((x, y) => y[1] - x[1]).map(([c, v]) => `• ${c}: ${brl(v)} (${pct(v, d.total)}%)`),
   ];
@@ -701,9 +778,10 @@ function ajustarFormLanc() {
   const gasto = t === 'fixa' || t === 'flexivel';
   formLanc.querySelectorAll('.so-gasto').forEach((el) => { el.hidden = !gasto; });
   formLanc.querySelectorAll('.so-emp').forEach((el) => { el.hidden = !t.startsWith('emp'); });
-  formLanc.querySelectorAll('.so-pagto').forEach((el) => { el.hidden = !(gasto || t === 'emp-saiu') || !estado.cartoes.length; });
+  formLanc.querySelectorAll('.so-pagto').forEach((el) => { el.hidden = !estado.cartoes.length && !estado.bancos.length; });
 }
 formLanc.tipo.addEventListener('change', ajustarFormLanc);
+formLanc.forma.addEventListener('change', () => { formLanc.forma.dataset.escolhido = '1'; });
 
 formLanc.addEventListener('submit', (e) => {
   e.preventDefault();
@@ -719,8 +797,11 @@ formLanc.addEventListener('submit', (e) => {
     if (!f.pessoa.value.trim()) return toast('Informe a pessoa');
     l.pessoa = f.pessoa.value.trim();
   }
-  const cartao = (ehGasto(l) || tipo === 'emp-saiu') && cartaoPorId(f.forma.value);
+  const forma = f.forma.value;
+  const cartao = forma.startsWith('c:') && cartaoPorId(forma.slice(2));
+  if (cartao && !(ehGasto(l) || tipo === 'emp-saiu')) return toast('Cartão só serve para gastos. Escolha uma conta.');
   if (cartao) { l.cartaoId = cartao.id; l.mes = mesDaFatura(cartao, l.data); }
+  if (forma.startsWith('b:') && bancoPorId(forma.slice(2))) l.bancoId = forma.slice(2);
   estado.lancamentos.push(l);
   salvar();
   mesAtual = mesDe(l);
@@ -728,12 +809,31 @@ formLanc.addEventListener('submit', (e) => {
   render(); toast(cartao ? `Adicionado na fatura de ${nomeMes(l.mes).toLowerCase()}` : 'Lançamento adicionado');
 });
 
+/* ================= Bancos ================= */
+
+$('#form-banco').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const nome = e.target.nome.value.trim();
+  if (estado.bancos.some((b) => norm(b.nome) === norm(nome))) return toast('Esse banco já está cadastrado');
+  acharOuCriarBanco(nome);
+  salvar(); e.target.reset(); render(); ajustarFormLanc(); toast('Banco cadastrado');
+});
+
+$('#lista-bancos').addEventListener('click', async (e) => {
+  const b = bancoPorId(e.target.closest('[data-del-banco]')?.dataset.delBanco);
+  if (!b) return;
+  if (!await confirmar(`Excluir o banco "${b.nome}"? Os lançamentos continuam, só sem o banco.`, 'Excluir banco')) return;
+  estado.bancos = estado.bancos.filter((x) => x !== b);
+  [...estado.lancamentos, ...estado.cartoes, ...estado.fixas, ...estado.rendas].forEach((x) => { if (x.bancoId === b.id) delete x.bancoId; });
+  salvar(); render(); ajustarFormLanc();
+});
+
 /* ================= Cartões ================= */
 
 $('#form-cartao').addEventListener('submit', (e) => {
   e.preventDefault();
   const f = e.target;
-  estado.cartoes.push({ id: uid(), nome: f.nome.value.trim(), fechamento: +f.fechamento.value, vencimento: +f.vencimento.value });
+  estado.cartoes.push({ id: uid(), nome: f.nome.value.trim(), fechamento: +f.fechamento.value, vencimento: +f.vencimento.value, ...(f.bancoId.value ? { bancoId: f.bancoId.value } : {}) });
   salvar(); f.reset(); render(); ajustarFormLanc(); toast('Cartão cadastrado');
 });
 
@@ -768,7 +868,7 @@ $('#form-fixa').addEventListener('submit', (e) => {
   if (!valor) return toast('Valor inválido');
   estado.fixas.push({
     id: uid(), nome: f.nome.value.trim(), valor, dia: +f.dia.value || null,
-    categoria: f.categoria.value.trim(), essencial: f.essencial.checked,
+    categoria: f.categoria.value.trim(), essencial: f.essencial.checked, ...(f.bancoId.value ? { bancoId: f.bancoId.value } : {}),
   });
   salvar(); f.reset(); f.essencial.checked = true;
   render(); toast('Conta fixa cadastrada');
@@ -782,7 +882,7 @@ $('#tb-fixas').addEventListener('click', async (e) => {
   if (b.dataset.pagar) {
     estado.lancamentos.push({
       id: uid(), data: dataNoMes(mesAtual, fixa.dia), descricao: fixa.nome, valor: fixa.valor,
-      categoria: fixa.categoria, tipo: 'fixa', essencial: fixa.essencial, fixaId: fixa.id,
+      categoria: fixa.categoria, tipo: 'fixa', essencial: fixa.essencial, fixaId: fixa.id, ...(bancoPorId(fixa.bancoId) ? { bancoId: fixa.bancoId } : {}),
     });
   } else if (b.dataset.desfazer) {
     const p = vinculado('fixaId', id, mesAtual);
@@ -802,7 +902,7 @@ $('#form-renda').addEventListener('submit', (e) => {
   const f = e.target;
   const valor = parseValor(f.valor.value);
   if (!valor) return toast('Valor inválido');
-  estado.rendas.push({ id: uid(), nome: f.nome.value.trim(), valor, dia: +f.dia.value || null });
+  estado.rendas.push({ id: uid(), nome: f.nome.value.trim(), valor, dia: +f.dia.value || null, ...(f.bancoId.value ? { bancoId: f.bancoId.value } : {}) });
   salvar(); f.reset(); render(); toast('Renda cadastrada');
 });
 
@@ -812,7 +912,7 @@ $('#tb-rendas').addEventListener('click', async (e) => {
   const r = estado.rendas.find((x) => x.id === id);
   if (!r) return;
   if (b.dataset.receber) {
-    estado.lancamentos.push({ id: uid(), data: dataNoMes(mesAtual, r.dia), descricao: r.nome, valor: r.valor, tipo: 'renda', rendaId: r.id });
+    estado.lancamentos.push({ id: uid(), data: dataNoMes(mesAtual, r.dia), descricao: r.nome, valor: r.valor, tipo: 'renda', rendaId: r.id, ...(bancoPorId(r.bancoId) ? { bancoId: r.bancoId } : {}) });
   } else if (b.dataset.desfazerRenda) {
     const p = vinculado('rendaId', id, mesAtual);
     estado.lancamentos = estado.lancamentos.filter((l) => l !== p);
@@ -850,7 +950,12 @@ function renderOrigemImportacao() {
   if (!cartaoPorId(importacao.cartaoId)) importacao.cartaoId = estado.cartoes[0]?.id || '';
   $('#imp-cartao').value = importacao.cartaoId;
   $('#imp-mes').value = importacao.mes || mesAtual;
-  $('#nome-doc').textContent = cartao ? 'a fatura do cartão (PDF ou print)' : 'seu extrato bancário';
+  $('#origem-banco').hidden = cartao;
+  const sb = $('#imp-banco');
+  sb.innerHTML = '<option value="">conforme a coluna “banco” da planilha</option>' + opcoesBancos(importacao.bancoId) + '<option value="__novo">+ outro banco…</option>';
+  sb.value = importacao.bancoId === '__novo' || bancoPorId(importacao.bancoId) ? importacao.bancoId : '';
+  $('#imp-banco-novo').hidden = sb.value !== '__novo';
+  $('#nome-doc').textContent = cartao ? 'a fatura do cartão (PDF ou print)' : 'seu extrato bancário (ou os extratos de todos os bancos de uma vez)';
   $('#prompt-ia').textContent = cartao ? PROMPT_CARTAO : PROMPT_CONTA;
 }
 document.querySelectorAll('input[name=origem]').forEach((r) => r.addEventListener('change', () => {
@@ -858,14 +963,19 @@ document.querySelectorAll('input[name=origem]').forEach((r) => r.addEventListene
 }));
 $('#imp-cartao').onchange = (e) => { importacao.cartaoId = e.target.value; };
 $('#imp-mes').onchange = (e) => { importacao.mes = e.target.value; };
+$('#imp-banco').onchange = (e) => {
+  importacao.bancoId = e.target.value;
+  $('#imp-banco-novo').hidden = e.target.value !== '__novo';
+  if (e.target.value === '__novo') $('#imp-banco-novo').focus();
+};
 
 const MODELO_CSV = `${CABECALHO}
-05/11/2026;Aluguel;1500,00;fixa;Moradia;sim;;
-05/11/2026;Salário Empresa X;4200,00;renda;;;;
-07/11/2026;Supermercado Extra;312,45;flexivel;Mercado;sim;;
-12/11/2026;Pix para Maria Souza;200,00;emprestimo-saiu;;;Maria Souza;
-25/11/2026;Pix de Maria Souza;200,00;emprestimo-entrou;;;Maria Souza;
-10/11/2026;Pagamento fatura Nubank;980,00;fatura;;;;
+05/11/2026;Aluguel;1500,00;fixa;Moradia;sim;;;Itaú
+05/11/2026;Salário Empresa X;4200,00;renda;;;;;Itaú
+07/11/2026;Supermercado Extra;312,45;flexivel;Mercado;sim;;;Itaú
+12/11/2026;Pix para Maria Souza;200,00;emprestimo-saiu;;;Maria Souza;;Nubank
+25/11/2026;Pix de Maria Souza;200,00;emprestimo-entrou;;;Maria Souza;;Nubank
+10/11/2026;Pagamento fatura Nubank;980,00;fatura;;;;;Nubank
 `;
 $('#copiar-modelo').onclick = async () => {
   try { await navigator.clipboard.writeText(MODELO_CSV); toast('Modelo copiado! Cole no chat da IA junto com o pedido.'); }
@@ -893,22 +1003,22 @@ function csvExemplo() {
   const [a, m] = anoMes(new Date()).split('-');
   const d = (dia) => `${String(dia).padStart(2, '0')}/${m}/${a}`;
   return [CABECALHO,
-    `${d(1)};Salário Empresa Exemplo;4200,00;renda;;;;`,
-    `${d(5)};Aluguel;1500,00;fixa;Moradia;sim;;`,
-    `${d(6)};Enel Energia;187,30;fixa;Contas da casa;sim;;`,
-    `${d(7)};Supermercado Pão de Açúcar;342,18;flexivel;Mercado;sim;;`,
-    `${d(8)};iFood;64,90;flexivel;Restaurante/Delivery;nao;;`,
-    `${d(9)};Pix para Maria Souza;300,00;emprestimo-saiu;;;Maria Souza;`,
-    `${d(10)};Pagamento fatura Nubank;1120,45;fatura;;;;`,
-    `${d(12)};Drogasil;48,70;flexivel;Saúde;;;`,
-    `${d(14)};Uber;23,40;flexivel;Transporte;;;`,
-    `${d(15)};Pix de João Lima;150,00;emprestimo-entrou;;;;`,
-    `${d(20)};Pix de Maria Souza;100,00;emprestimo-entrou;;;Maria Souza;`,
-    `${d(22)};Cinema;56,00;flexivel;Lazer;nao;;`,
+    `${d(1)};Salário Empresa Exemplo;4200,00;renda;;;;;Itaú`,
+    `${d(5)};Aluguel;1500,00;fixa;Moradia;sim;;;Itaú`,
+    `${d(6)};Enel Energia;187,30;fixa;Contas da casa;sim;;;Itaú`,
+    `${d(7)};Supermercado Pão de Açúcar;342,18;flexivel;Mercado;sim;;;Nubank`,
+    `${d(8)};iFood;64,90;flexivel;Restaurante/Delivery;nao;;;Nubank`,
+    `${d(9)};Pix para Maria Souza;300,00;emprestimo-saiu;;;Maria Souza;;Inter`,
+    `${d(10)};Pagamento fatura Nubank;1120,45;fatura;;;;;Itaú`,
+    `${d(12)};Drogasil;48,70;flexivel;Saúde;;;;Inter`,
+    `${d(14)};Uber;23,40;flexivel;Transporte;;;;Nubank`,
+    `${d(15)};Pix de João Lima;150,00;emprestimo-entrou;;;;;Inter`,
+    `${d(20)};Pix de Maria Souza;100,00;emprestimo-entrou;;;Maria Souza;;Inter`,
+    `${d(22)};Cinema;56,00;flexivel;Lazer;nao;;;Nubank`,
   ].join('\n');
 }
 
-const temExemplos = () => ['lancamentos', 'fixas', 'rendas', 'cartoes'].some((k) => estado[k].some((x) => x.exemplo));
+const temExemplos = () => ['lancamentos', 'fixas', 'rendas', 'cartoes', 'bancos'].some((k) => estado[k].some((x) => x.exemplo));
 
 $('#ver-exemplo').onclick = () => {
   // cadastros de exemplo, para a revisão mostrar os vínculos (conta fixa, renda, cartão)
@@ -918,7 +1028,7 @@ $('#ver-exemplo').onclick = () => {
   if (!estado.rendas.length) estado.rendas.push({ id: uid(), nome: 'Salário', valor: 4200, dia: 1, exemplo: true });
   if (!estado.cartoes.length) estado.cartoes.push({ id: uid(), nome: 'Nubank', fechamento: 3, vencimento: 10, exemplo: true });
   salvar(); render();
-  importacao.origem = 'conta'; importacao.exemplo = true;
+  importacao.origem = 'conta'; importacao.exemplo = true; importacao.bancoId = '';
   document.querySelector('input[name=origem][value=conta]').checked = true;
   renderOrigemImportacao();
   iniciarRevisao(csvExemplo());
@@ -926,12 +1036,13 @@ $('#ver-exemplo').onclick = () => {
 
 $('#apagar-exemplos').onclick = async () => {
   if (!await confirmar('Apagar todos os dados de exemplo? Seus dados de verdade continuam.', 'Apagar exemplos')) return;
-  const ids = new Set([...estado.fixas, ...estado.rendas, ...estado.cartoes].filter((x) => x.exemplo).map((x) => x.id));
+  const ids = new Set([...estado.fixas, ...estado.rendas, ...estado.cartoes, ...estado.bancos].filter((x) => x.exemplo).map((x) => x.id));
   estado.lancamentos = estado.lancamentos.filter((l) => !l.exemplo);
   estado.fixas = estado.fixas.filter((x) => !x.exemplo);
   estado.rendas = estado.rendas.filter((x) => !x.exemplo);
   estado.cartoes = estado.cartoes.filter((x) => !x.exemplo);
-  estado.lancamentos.forEach((l) => { ['fixaId', 'rendaId', 'cartaoId'].forEach((k) => { if (ids.has(l[k])) delete l[k]; }); });
+  estado.bancos = estado.bancos.filter((x) => !x.exemplo);
+  estado.lancamentos.forEach((l) => { ['fixaId', 'rendaId', 'cartaoId', 'bancoId'].forEach((k) => { if (ids.has(l[k])) delete l[k]; }); });
   salvar(); render(); ajustarFormLanc(); toast('Exemplos apagados');
 };
 
@@ -949,18 +1060,32 @@ function iniciarRevisao(texto) {
     if (!cartaoPorId(importacao.cartaoId)) throw new Error('Cadastre e selecione um cartão antes de importar a fatura.');
     if (!importacao.mes) throw new Error('Informe o mês de vencimento da fatura.');
   }
+  let bancoPadrao = '';
+  if (importacao.origem === 'conta') {
+    bancoPadrao = $('#imp-banco').value;
+    if (bancoPadrao === '__novo') {
+      const nome = $('#imp-banco-novo').value.trim();
+      if (!nome) throw new Error('Escreva o nome do banco do extrato.');
+      bancoPadrao = acharOuCriarBanco(nome, importacao.exemplo);
+      importacao.bancoId = bancoPadrao; $('#imp-banco-novo').value = '';
+    }
+  }
   const linhas = parseCSV(texto);
   if (linhas.length < 2) throw new Error('O arquivo está vazio ou só tem o cabeçalho.');
   const cab = linhas[0].map(norm);
   const col = (...nomes) => cab.findIndex((c) => nomes.some((n) => c.startsWith(n)));
   const ix = {
     data: col('data'), desc: col('descri', 'historico', 'estabelecimento'), valor: col('valor'),
-    cat: col('categ'), tipo: col('tipo'), ess: col('essencial'), pessoa: col('pessoa', 'nome'), parcela: col('parcela'),
+    cat: col('categ'), tipo: col('tipo'), ess: col('essencial'), pessoa: col('pessoa', 'nome'), parcela: col('parcela'), banco: col('banco', 'conta', 'instituicao'),
   };
   if (ix.data < 0 || ix.desc < 0 || ix.valor < 0) {
     throw new Error('Não encontrei as colunas "data", "descricao" e "valor". Use o modelo de planilha.');
   }
-  const existentes = new Set(estado.lancamentos.map((l) => `${l.data}|${l.valor}|${norm(l.descricao)}`));
+  // duplicados: mesma data, valor e descrição na mesma conta (ou em lançamento sem conta informada)
+  const base = (l) => `${l.data}|${l.valor}|${norm(l.descricao)}`;
+  const comConta = new Set(estado.lancamentos.map((l) => `${base(l)}|${fonteDe(l)}`));
+  const semConta = new Set(estado.lancamentos.filter((l) => !fonteDe(l)).map(base));
+  const todos = new Set(estado.lancamentos.map(base));
   const doCartao = importacao.origem === 'cartao';
 
   revisao = linhas.slice(1).map((c) => {
@@ -974,20 +1099,24 @@ function iniciarRevisao(texto) {
       data: parseData(get(ix.data)), descricao, valor: parseValor(get(ix.valor)), tipo,
       categoria: get(ix.cat) || mem.categoria || '', pessoa: get(ix.pessoa) || mem.pessoa || '',
       parcela: get(ix.parcela), essencial: ess !== null ? ess : (mem.essencial ?? null), avisos: [],
+      bancoId: doCartao ? '' : (get(ix.banco) ? acharOuCriarBanco(get(ix.banco), importacao.exemplo) : bancoPadrao),
     };
     sugerirVinculos(r);
     if (!r.data) r.avisos.push('data inválida');
     if (!r.valor) r.avisos.push('valor inválido');
-    const dup = existentes.has(`${r.data}|${r.valor}|${norm(descricao)}`);
+    const fonte = doCartao ? 'c:' + importacao.cartaoId : (r.bancoId ? 'b:' + r.bancoId : '');
+    const b0 = `${r.data}|${r.valor}|${norm(descricao)}`;
+    const dup = fonte ? (comConta.has(`${b0}|${fonte}`) || semConta.has(b0)) : todos.has(b0);
     if (dup) r.avisos.push('já lançado antes?');
     r.incluir = !dup && !!r.data && !!r.valor;
     return r;
   });
 
   erroImportacao('');
+  salvar(); render(); // bancos novos vindos da planilha
   $('#rev-titulo').textContent = doCartao
     ? `Revisão — fatura ${cartaoPorId(importacao.cartaoId).nome} (${nomeMes(importacao.mes).toLowerCase()})`
-    : 'Revisão — extrato da conta';
+    : `Revisão — extrato${bancoPorId(bancoPadrao) ? ` do ${bancoPorId(bancoPadrao).nome}` : 's'}`;
   $('#rev-exemplo').hidden = !importacao.exemplo;
   $('#imp-inicio').hidden = true; $('#imp-revisao').hidden = false;
   renderRevisao();
@@ -1015,6 +1144,9 @@ function renderRevisao() {
       <td class="sel"><input type="checkbox" data-f="incluir" ${r.incluir ? 'checked' : ''} aria-label="Salvar esta linha"></td>
       <td class="data"><input type="date" data-f="data" value="${r.data}" aria-label="Data"></td>
       <td class="desc"><input data-f="descricao" value="${esc(r.descricao)}" aria-label="Descrição">
+        ${importacao.origem === 'conta' && estado.bancos.length ? `<select data-f="bancoId" class="vinculo banco-sel" aria-label="Banco">
+          <option value="">🏦 banco não informado</option>${estado.bancos.map((b) => `<option value="${b.id}" ${r.bancoId === b.id ? 'selected' : ''}>🏦 ${esc(b.nome)}</option>`).join('')}
+        </select>` : ''}
         ${r.parcela ? `<span class="legenda">parcela ${esc(r.parcela)}</span>` : ''}
         ${r.avisos.length ? `<span class="aviso">⚠ ${r.avisos.join(' · ')}</span>` : ''}</td>
       <td class="num val"><input data-f="valor" value="${r.valor ? r.valor.toFixed(2).replace('.', ',') : ''}" inputmode="decimal" aria-label="Valor"></td>
@@ -1094,6 +1226,7 @@ $('#confirmar-imp').onclick = () => {
   inc.forEach((r) => {
     const l = { id: uid(), data: r.data, descricao: r.descricao.trim(), valor: r.valor, tipo: r.tipo };
     if (doCartao) { l.cartaoId = importacao.cartaoId; l.mes = importacao.mes; }
+    else if (bancoPorId(r.bancoId)) l.bancoId = r.bancoId;
     if (importacao.exemplo) l.exemplo = true;
     if (r.parcela) l.parcela = r.parcela;
     const mes = mesDe(l);
