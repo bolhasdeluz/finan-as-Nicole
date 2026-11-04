@@ -632,7 +632,7 @@ $('#rel-imprimir').onclick = () => window.print();
 
 /* ================= Navegação ================= */
 
-const ABAS_MAIS = ['cartao', 'fixas', 'renda', 'emprestimos', 'nuvem', 'ajuda'];
+const ABAS_MAIS = ['cartao', 'fixas', 'renda', 'emprestimos', 'nuvem'];
 function abrirMais(abrir) {
   $('#menu-mais').hidden = !abrir;
   $('#btn-mais').setAttribute('aria-expanded', String(abrir));
@@ -1320,5 +1320,3 @@ render();
 ajustarFormLanc();
 renderNuvem();
 detectarNuvem().then(() => { renderNuvem(); sincronizar(); });
-// primeira vez abrindo o app: mostra o tutorial
-if (!nuvem && !estado.lancamentos.length && !estado.fixas.length && !estado.rendas.length && !estado.cartoes.length) irPara('ajuda');
